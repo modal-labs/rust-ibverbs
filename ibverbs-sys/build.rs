@@ -70,10 +70,18 @@ fn main() {
         // build vendor/rdma-core
         // note that we only build it to generate the bindings!
         update_submodule();
-        let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("failed to get current directory");
-        println!("cargo:include={manifest_dir}/vendor/rdma-core/build/include");
-        println!("cargo:rustc-link-search=native={manifest_dir}/vendor/rdma-core/build/lib");
-        format!("{}/include/", build_vendored_rdma())
+        // `build_vendored_rdma` returns OUT_DIR; the cmake crate configures and
+        // builds into `{OUT_DIR}/build` and, with `no_build_target`, never runs
+        // the install step. rdma-core publishes its public headers into its
+        // *build* tree (`include/infiniband/...`), so that is the only include
+        // directory that exists here, and the built libraries live next to it.
+        // Pointing bindgen at it also guarantees the bindings are generated
+        // from the vendored checkout rather than from headers that happen to
+        // be installed under /usr/include on the build host.
+        let out_dir = build_vendored_rdma();
+        println!("cargo:include={out_dir}/build/include");
+        println!("cargo:rustc-link-search=native={out_dir}/build/lib");
+        format!("{out_dir}/build/include/")
     };
 
     let ibverbs_header_dir = if let Ok(ibverbs_header_dir) = env::var("IBVERBS_HEADER_DIR") {
