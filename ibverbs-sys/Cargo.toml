@@ -28,6 +28,13 @@ exclude = ["vendor/rdma-core/build/"]
 all-features = true
 
 [features]
+# Use the bindings committed under `src/prebuilt/` instead of running the
+# vendored rdma-core cmake build and bindgen, removing cmake, libclang, and
+# libnl from the build-time requirements. Applies only to targets with a
+# committed bindings file, loses to an explicit `RDMA_CORE_INCLUDE_DIR`, and
+# does not cover `efa`/`rdmacm` (whose bindings are not pre-generated);
+# anything else falls back to bindgen.
+prebuilt-bindings = []
 # Bind and link the EFA provider direct-verbs (`efadv`), for AWS Elastic Fabric Adapter SRD queue
 # pairs. Requires `libefa` at build and run time.
 efa = []
