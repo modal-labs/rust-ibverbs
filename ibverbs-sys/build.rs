@@ -88,6 +88,7 @@ fn main() {
         let target = env::var("TARGET").unwrap_or_default();
         let prebuilt_file = match target.as_str() {
             "x86_64-unknown-linux-gnu" => Some("bindings_x86_64_linux.rs"),
+            "aarch64-unknown-linux-gnu" => Some("bindings_aarch64_linux.rs"),
             _ => None,
         };
         if let Some(file) = prebuilt_file {

@@ -6,6 +6,8 @@
 # - hack: check combinations of feature flags
 # - semver: checks pull requests for undeclared public-API breakage
 # - msrv: check that the msrv specified in the crate is correct
+# - prebuilt-bindings: checks that the committed bindings in ibverbs-sys/src/prebuilt match what
+#   the build script generates from the vendored rdma-core
 permissions:
   contents: read
 # This configuration allows maintainers of this repo to create a branch and pull request based on
@@ -148,3 +150,36 @@ jobs:
           toolchain: ${{ matrix.msrv }}
       - name: cargo +${{ matrix.msrv }} check
         run: cargo check
+  prebuilt-bindings:
+    # The `prebuilt-bindings` feature compiles bindings committed under ibverbs-sys/src/prebuilt
+    # instead of running bindgen. Their layout assertions catch a file built for the wrong
+    # architecture or glibc, but not one generated from an older rdma-core than the vendored one;
+    # this job does, by regenerating every file the way regenerate.sh documents and failing on
+    # any difference. A bump of the vendored submodule or a change to the bindgen configuration
+    # in build.rs must be accompanied by regenerated files.
+    runs-on: ubuntu-latest
+    name: stable / prebuilt bindings up to date
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install clang (libclang for bindgen) and zstd
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zstd
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - name: Fetch the pinned glibc 2.28 and Linux 4.19 header sets
+        run: ibverbs-sys/src/prebuilt/fetch-sysroots.sh /tmp/sysroots
+      - name: Regenerate every committed target
+        run: |
+          for triple in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+            ibverbs-sys/src/prebuilt/regenerate.sh "$triple" \
+              "/tmp/sysroots/$triple/glibc/include" "/tmp/sysroots/$triple/kernel/include"
+          done
+      - name: Committed bindings match
+        run: |
+          git diff --stat --exit-code -- ibverbs-sys/src/prebuilt || {
+            echo "::error::committed prebuilt bindings are stale; regenerate them (see ibverbs-sys/src/prebuilt/README.md)"
+            exit 1
+          }

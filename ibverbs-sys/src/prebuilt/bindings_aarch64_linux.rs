@@ -49,8 +49,7 @@ pub struct __pthread_mutex_s {
     pub __owner: ::std::os::raw::c_int,
     pub __nusers: ::std::os::raw::c_uint,
     pub __kind: ::std::os::raw::c_int,
-    pub __spins: ::std::os::raw::c_short,
-    pub __elision: ::std::os::raw::c_short,
+    pub __spins: ::std::os::raw::c_int,
     pub __list: __pthread_list_t,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
@@ -69,8 +68,6 @@ const _: () = {
         [::std::mem::offset_of!(__pthread_mutex_s, __kind) - 16usize];
     ["Offset of field: __pthread_mutex_s::__spins"]
         [::std::mem::offset_of!(__pthread_mutex_s, __spins) - 20usize];
-    ["Offset of field: __pthread_mutex_s::__elision"]
-        [::std::mem::offset_of!(__pthread_mutex_s, __elision) - 22usize];
     ["Offset of field: __pthread_mutex_s::__list"]
         [::std::mem::offset_of!(__pthread_mutex_s, __list) - 24usize];
 };
@@ -208,12 +205,12 @@ impl Default for __pthread_cond_s {
 #[derive(Copy, Clone)]
 pub union pthread_mutex_t {
     pub __data: __pthread_mutex_s,
-    pub __size: [::std::os::raw::c_char; 40usize],
+    pub __size: [::std::os::raw::c_char; 48usize],
     pub __align: ::std::os::raw::c_long,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of pthread_mutex_t"][::std::mem::size_of::<pthread_mutex_t>() - 40usize];
+    ["Size of pthread_mutex_t"][::std::mem::size_of::<pthread_mutex_t>() - 48usize];
     ["Alignment of pthread_mutex_t"][::std::mem::align_of::<pthread_mutex_t>() - 8usize];
     ["Offset of field: pthread_mutex_t::__data"]
         [::std::mem::offset_of!(pthread_mutex_t, __data) - 0usize];
@@ -3579,7 +3576,7 @@ pub struct ibv_srq {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ibv_srq"][::std::mem::size_of::<ibv_srq>() - 128usize];
+    ["Size of ibv_srq"][::std::mem::size_of::<ibv_srq>() - 136usize];
     ["Alignment of ibv_srq"][::std::mem::align_of::<ibv_srq>() - 8usize];
     ["Offset of field: ibv_srq::context"][::std::mem::offset_of!(ibv_srq, context) - 0usize];
     ["Offset of field: ibv_srq::srq_context"]
@@ -3587,9 +3584,9 @@ const _: () = {
     ["Offset of field: ibv_srq::pd"][::std::mem::offset_of!(ibv_srq, pd) - 16usize];
     ["Offset of field: ibv_srq::handle"][::std::mem::offset_of!(ibv_srq, handle) - 24usize];
     ["Offset of field: ibv_srq::mutex"][::std::mem::offset_of!(ibv_srq, mutex) - 32usize];
-    ["Offset of field: ibv_srq::cond"][::std::mem::offset_of!(ibv_srq, cond) - 72usize];
+    ["Offset of field: ibv_srq::cond"][::std::mem::offset_of!(ibv_srq, cond) - 80usize];
     ["Offset of field: ibv_srq::events_completed"]
-        [::std::mem::offset_of!(ibv_srq, events_completed) - 120usize];
+        [::std::mem::offset_of!(ibv_srq, events_completed) - 128usize];
 };
 impl Default for ibv_srq {
     fn default() -> Self {
@@ -3625,7 +3622,7 @@ pub struct ibv_wq {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ibv_wq"][::std::mem::size_of::<ibv_wq>() - 152usize];
+    ["Size of ibv_wq"][::std::mem::size_of::<ibv_wq>() - 160usize];
     ["Alignment of ibv_wq"][::std::mem::align_of::<ibv_wq>() - 8usize];
     ["Offset of field: ibv_wq::context"][::std::mem::offset_of!(ibv_wq, context) - 0usize];
     ["Offset of field: ibv_wq::wq_context"][::std::mem::offset_of!(ibv_wq, wq_context) - 8usize];
@@ -3637,10 +3634,10 @@ const _: () = {
     ["Offset of field: ibv_wq::wq_type"][::std::mem::offset_of!(ibv_wq, wq_type) - 44usize];
     ["Offset of field: ibv_wq::post_recv"][::std::mem::offset_of!(ibv_wq, post_recv) - 48usize];
     ["Offset of field: ibv_wq::mutex"][::std::mem::offset_of!(ibv_wq, mutex) - 56usize];
-    ["Offset of field: ibv_wq::cond"][::std::mem::offset_of!(ibv_wq, cond) - 96usize];
+    ["Offset of field: ibv_wq::cond"][::std::mem::offset_of!(ibv_wq, cond) - 104usize];
     ["Offset of field: ibv_wq::events_completed"]
-        [::std::mem::offset_of!(ibv_wq, events_completed) - 144usize];
-    ["Offset of field: ibv_wq::comp_mask"][::std::mem::offset_of!(ibv_wq, comp_mask) - 148usize];
+        [::std::mem::offset_of!(ibv_wq, events_completed) - 152usize];
+    ["Offset of field: ibv_wq::comp_mask"][::std::mem::offset_of!(ibv_wq, comp_mask) - 156usize];
 };
 impl Default for ibv_wq {
     fn default() -> Self {
@@ -3670,7 +3667,7 @@ pub struct ibv_qp {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ibv_qp"][::std::mem::size_of::<ibv_qp>() - 160usize];
+    ["Size of ibv_qp"][::std::mem::size_of::<ibv_qp>() - 168usize];
     ["Alignment of ibv_qp"][::std::mem::align_of::<ibv_qp>() - 8usize];
     ["Offset of field: ibv_qp::context"][::std::mem::offset_of!(ibv_qp, context) - 0usize];
     ["Offset of field: ibv_qp::qp_context"][::std::mem::offset_of!(ibv_qp, qp_context) - 8usize];
@@ -3683,9 +3680,9 @@ const _: () = {
     ["Offset of field: ibv_qp::state"][::std::mem::offset_of!(ibv_qp, state) - 56usize];
     ["Offset of field: ibv_qp::qp_type"][::std::mem::offset_of!(ibv_qp, qp_type) - 60usize];
     ["Offset of field: ibv_qp::mutex"][::std::mem::offset_of!(ibv_qp, mutex) - 64usize];
-    ["Offset of field: ibv_qp::cond"][::std::mem::offset_of!(ibv_qp, cond) - 104usize];
+    ["Offset of field: ibv_qp::cond"][::std::mem::offset_of!(ibv_qp, cond) - 112usize];
     ["Offset of field: ibv_qp::events_completed"]
-        [::std::mem::offset_of!(ibv_qp, events_completed) - 152usize];
+        [::std::mem::offset_of!(ibv_qp, events_completed) - 160usize];
 };
 impl Default for ibv_qp {
     fn default() -> Self {
@@ -3794,57 +3791,57 @@ pub struct ibv_qp_ex {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ibv_qp_ex"][::std::mem::size_of::<ibv_qp_ex>() - 360usize];
+    ["Size of ibv_qp_ex"][::std::mem::size_of::<ibv_qp_ex>() - 368usize];
     ["Alignment of ibv_qp_ex"][::std::mem::align_of::<ibv_qp_ex>() - 8usize];
     ["Offset of field: ibv_qp_ex::qp_base"][::std::mem::offset_of!(ibv_qp_ex, qp_base) - 0usize];
     ["Offset of field: ibv_qp_ex::comp_mask"]
-        [::std::mem::offset_of!(ibv_qp_ex, comp_mask) - 160usize];
-    ["Offset of field: ibv_qp_ex::wr_id"][::std::mem::offset_of!(ibv_qp_ex, wr_id) - 168usize];
+        [::std::mem::offset_of!(ibv_qp_ex, comp_mask) - 168usize];
+    ["Offset of field: ibv_qp_ex::wr_id"][::std::mem::offset_of!(ibv_qp_ex, wr_id) - 176usize];
     ["Offset of field: ibv_qp_ex::wr_flags"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_flags) - 176usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_flags) - 184usize];
     ["Offset of field: ibv_qp_ex::wr_atomic_cmp_swp"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_atomic_cmp_swp) - 184usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_atomic_cmp_swp) - 192usize];
     ["Offset of field: ibv_qp_ex::wr_atomic_fetch_add"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_atomic_fetch_add) - 192usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_atomic_fetch_add) - 200usize];
     ["Offset of field: ibv_qp_ex::wr_bind_mw"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_bind_mw) - 200usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_bind_mw) - 208usize];
     ["Offset of field: ibv_qp_ex::wr_local_inv"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_local_inv) - 208usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_local_inv) - 216usize];
     ["Offset of field: ibv_qp_ex::wr_rdma_read"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_rdma_read) - 216usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_rdma_read) - 224usize];
     ["Offset of field: ibv_qp_ex::wr_rdma_write"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_rdma_write) - 224usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_rdma_write) - 232usize];
     ["Offset of field: ibv_qp_ex::wr_rdma_write_imm"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_rdma_write_imm) - 232usize];
-    ["Offset of field: ibv_qp_ex::wr_send"][::std::mem::offset_of!(ibv_qp_ex, wr_send) - 240usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_rdma_write_imm) - 240usize];
+    ["Offset of field: ibv_qp_ex::wr_send"][::std::mem::offset_of!(ibv_qp_ex, wr_send) - 248usize];
     ["Offset of field: ibv_qp_ex::wr_send_imm"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_send_imm) - 248usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_send_imm) - 256usize];
     ["Offset of field: ibv_qp_ex::wr_send_inv"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_send_inv) - 256usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_send_inv) - 264usize];
     ["Offset of field: ibv_qp_ex::wr_send_tso"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_send_tso) - 264usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_send_tso) - 272usize];
     ["Offset of field: ibv_qp_ex::wr_set_ud_addr"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_set_ud_addr) - 272usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_set_ud_addr) - 280usize];
     ["Offset of field: ibv_qp_ex::wr_set_xrc_srqn"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_set_xrc_srqn) - 280usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_set_xrc_srqn) - 288usize];
     ["Offset of field: ibv_qp_ex::wr_set_inline_data"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_set_inline_data) - 288usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_set_inline_data) - 296usize];
     ["Offset of field: ibv_qp_ex::wr_set_inline_data_list"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_set_inline_data_list) - 296usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_set_inline_data_list) - 304usize];
     ["Offset of field: ibv_qp_ex::wr_set_sge"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_set_sge) - 304usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_set_sge) - 312usize];
     ["Offset of field: ibv_qp_ex::wr_set_sge_list"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_set_sge_list) - 312usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_set_sge_list) - 320usize];
     ["Offset of field: ibv_qp_ex::wr_start"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_start) - 320usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_start) - 328usize];
     ["Offset of field: ibv_qp_ex::wr_complete"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_complete) - 328usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_complete) - 336usize];
     ["Offset of field: ibv_qp_ex::wr_abort"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_abort) - 336usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_abort) - 344usize];
     ["Offset of field: ibv_qp_ex::wr_atomic_write"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_atomic_write) - 344usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_atomic_write) - 352usize];
     ["Offset of field: ibv_qp_ex::wr_flush"]
-        [::std::mem::offset_of!(ibv_qp_ex, wr_flush) - 352usize];
+        [::std::mem::offset_of!(ibv_qp_ex, wr_flush) - 360usize];
 };
 impl Default for ibv_qp_ex {
     fn default() -> Self {
@@ -3915,7 +3912,7 @@ pub struct ibv_cq {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ibv_cq"][::std::mem::size_of::<ibv_cq>() - 128usize];
+    ["Size of ibv_cq"][::std::mem::size_of::<ibv_cq>() - 136usize];
     ["Alignment of ibv_cq"][::std::mem::align_of::<ibv_cq>() - 8usize];
     ["Offset of field: ibv_cq::context"][::std::mem::offset_of!(ibv_cq, context) - 0usize];
     ["Offset of field: ibv_cq::channel"][::std::mem::offset_of!(ibv_cq, channel) - 8usize];
@@ -3923,11 +3920,11 @@ const _: () = {
     ["Offset of field: ibv_cq::handle"][::std::mem::offset_of!(ibv_cq, handle) - 24usize];
     ["Offset of field: ibv_cq::cqe"][::std::mem::offset_of!(ibv_cq, cqe) - 28usize];
     ["Offset of field: ibv_cq::mutex"][::std::mem::offset_of!(ibv_cq, mutex) - 32usize];
-    ["Offset of field: ibv_cq::cond"][::std::mem::offset_of!(ibv_cq, cond) - 72usize];
+    ["Offset of field: ibv_cq::cond"][::std::mem::offset_of!(ibv_cq, cond) - 80usize];
     ["Offset of field: ibv_cq::comp_events_completed"]
-        [::std::mem::offset_of!(ibv_cq, comp_events_completed) - 120usize];
+        [::std::mem::offset_of!(ibv_cq, comp_events_completed) - 128usize];
     ["Offset of field: ibv_cq::async_events_completed"]
-        [::std::mem::offset_of!(ibv_cq, async_events_completed) - 124usize];
+        [::std::mem::offset_of!(ibv_cq, async_events_completed) - 132usize];
 };
 impl Default for ibv_cq {
     fn default() -> Self {
@@ -4017,7 +4014,7 @@ pub struct ibv_cq_ex {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ibv_cq_ex"][::std::mem::size_of::<ibv_cq_ex>() - 288usize];
+    ["Size of ibv_cq_ex"][::std::mem::size_of::<ibv_cq_ex>() - 296usize];
     ["Alignment of ibv_cq_ex"][::std::mem::align_of::<ibv_cq_ex>() - 8usize];
     ["Offset of field: ibv_cq_ex::context"][::std::mem::offset_of!(ibv_cq_ex, context) - 0usize];
     ["Offset of field: ibv_cq_ex::channel"][::std::mem::offset_of!(ibv_cq_ex, channel) - 8usize];
@@ -4026,50 +4023,50 @@ const _: () = {
     ["Offset of field: ibv_cq_ex::handle"][::std::mem::offset_of!(ibv_cq_ex, handle) - 24usize];
     ["Offset of field: ibv_cq_ex::cqe"][::std::mem::offset_of!(ibv_cq_ex, cqe) - 28usize];
     ["Offset of field: ibv_cq_ex::mutex"][::std::mem::offset_of!(ibv_cq_ex, mutex) - 32usize];
-    ["Offset of field: ibv_cq_ex::cond"][::std::mem::offset_of!(ibv_cq_ex, cond) - 72usize];
+    ["Offset of field: ibv_cq_ex::cond"][::std::mem::offset_of!(ibv_cq_ex, cond) - 80usize];
     ["Offset of field: ibv_cq_ex::comp_events_completed"]
-        [::std::mem::offset_of!(ibv_cq_ex, comp_events_completed) - 120usize];
+        [::std::mem::offset_of!(ibv_cq_ex, comp_events_completed) - 128usize];
     ["Offset of field: ibv_cq_ex::async_events_completed"]
-        [::std::mem::offset_of!(ibv_cq_ex, async_events_completed) - 124usize];
+        [::std::mem::offset_of!(ibv_cq_ex, async_events_completed) - 132usize];
     ["Offset of field: ibv_cq_ex::comp_mask"]
-        [::std::mem::offset_of!(ibv_cq_ex, comp_mask) - 128usize];
-    ["Offset of field: ibv_cq_ex::status"][::std::mem::offset_of!(ibv_cq_ex, status) - 132usize];
-    ["Offset of field: ibv_cq_ex::wr_id"][::std::mem::offset_of!(ibv_cq_ex, wr_id) - 136usize];
+        [::std::mem::offset_of!(ibv_cq_ex, comp_mask) - 136usize];
+    ["Offset of field: ibv_cq_ex::status"][::std::mem::offset_of!(ibv_cq_ex, status) - 140usize];
+    ["Offset of field: ibv_cq_ex::wr_id"][::std::mem::offset_of!(ibv_cq_ex, wr_id) - 144usize];
     ["Offset of field: ibv_cq_ex::start_poll"]
-        [::std::mem::offset_of!(ibv_cq_ex, start_poll) - 144usize];
+        [::std::mem::offset_of!(ibv_cq_ex, start_poll) - 152usize];
     ["Offset of field: ibv_cq_ex::next_poll"]
-        [::std::mem::offset_of!(ibv_cq_ex, next_poll) - 152usize];
+        [::std::mem::offset_of!(ibv_cq_ex, next_poll) - 160usize];
     ["Offset of field: ibv_cq_ex::end_poll"]
-        [::std::mem::offset_of!(ibv_cq_ex, end_poll) - 160usize];
+        [::std::mem::offset_of!(ibv_cq_ex, end_poll) - 168usize];
     ["Offset of field: ibv_cq_ex::read_opcode"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_opcode) - 168usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_opcode) - 176usize];
     ["Offset of field: ibv_cq_ex::read_vendor_err"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_vendor_err) - 176usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_vendor_err) - 184usize];
     ["Offset of field: ibv_cq_ex::read_byte_len"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_byte_len) - 184usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_byte_len) - 192usize];
     ["Offset of field: ibv_cq_ex::read_imm_data"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_imm_data) - 192usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_imm_data) - 200usize];
     ["Offset of field: ibv_cq_ex::read_qp_num"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_qp_num) - 200usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_qp_num) - 208usize];
     ["Offset of field: ibv_cq_ex::read_src_qp"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_src_qp) - 208usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_src_qp) - 216usize];
     ["Offset of field: ibv_cq_ex::read_wc_flags"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_wc_flags) - 216usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_wc_flags) - 224usize];
     ["Offset of field: ibv_cq_ex::read_slid"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_slid) - 224usize];
-    ["Offset of field: ibv_cq_ex::read_sl"][::std::mem::offset_of!(ibv_cq_ex, read_sl) - 232usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_slid) - 232usize];
+    ["Offset of field: ibv_cq_ex::read_sl"][::std::mem::offset_of!(ibv_cq_ex, read_sl) - 240usize];
     ["Offset of field: ibv_cq_ex::read_dlid_path_bits"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_dlid_path_bits) - 240usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_dlid_path_bits) - 248usize];
     ["Offset of field: ibv_cq_ex::read_completion_ts"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_completion_ts) - 248usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_completion_ts) - 256usize];
     ["Offset of field: ibv_cq_ex::read_cvlan"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_cvlan) - 256usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_cvlan) - 264usize];
     ["Offset of field: ibv_cq_ex::read_flow_tag"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_flow_tag) - 264usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_flow_tag) - 272usize];
     ["Offset of field: ibv_cq_ex::read_tm_info"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_tm_info) - 272usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_tm_info) - 280usize];
     ["Offset of field: ibv_cq_ex::read_completion_wallclock_ns"]
-        [::std::mem::offset_of!(ibv_cq_ex, read_completion_wallclock_ns) - 280usize];
+        [::std::mem::offset_of!(ibv_cq_ex, read_completion_wallclock_ns) - 288usize];
 };
 impl Default for ibv_cq_ex {
     fn default() -> Self {
@@ -5219,7 +5216,7 @@ pub struct ibv_context {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of ibv_context"][::std::mem::size_of::<ibv_context>() - 328usize];
+    ["Size of ibv_context"][::std::mem::size_of::<ibv_context>() - 336usize];
     ["Alignment of ibv_context"][::std::mem::align_of::<ibv_context>() - 8usize];
     ["Offset of field: ibv_context::device"][::std::mem::offset_of!(ibv_context, device) - 0usize];
     ["Offset of field: ibv_context::ops"][::std::mem::offset_of!(ibv_context, ops) - 8usize];
@@ -5231,7 +5228,7 @@ const _: () = {
         [::std::mem::offset_of!(ibv_context, num_comp_vectors) - 272usize];
     ["Offset of field: ibv_context::mutex"][::std::mem::offset_of!(ibv_context, mutex) - 280usize];
     ["Offset of field: ibv_context::abi_compat"]
-        [::std::mem::offset_of!(ibv_context, abi_compat) - 320usize];
+        [::std::mem::offset_of!(ibv_context, abi_compat) - 328usize];
 };
 impl Default for ibv_context {
     fn default() -> Self {
@@ -5686,7 +5683,7 @@ pub struct verbs_context {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of verbs_context"][::std::mem::size_of::<verbs_context>() - 680usize];
+    ["Size of verbs_context"][::std::mem::size_of::<verbs_context>() - 688usize];
     ["Alignment of verbs_context"][::std::mem::align_of::<verbs_context>() - 8usize];
     ["Offset of field: verbs_context::dm_export_dmabuf_fd"]
         [::std::mem::offset_of!(verbs_context, dm_export_dmabuf_fd) - 0usize];
