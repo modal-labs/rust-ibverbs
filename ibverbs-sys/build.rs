@@ -2,28 +2,42 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn build_vendored_rdma() -> String {
-    eprintln!("run cmake");
-    let built_in = cmake::Config::new("vendor/rdma-core")
-        .define("NO_MAN_PAGES", "1")
-        // cmake crate defaults CMAKE_INSTALL_PREFIX to the output directory
-        //
-        //   https://github.com/rust-lang/cmake-rs/blob/94da9de2ea79ab6cad572e908864a160cf4847a9/src/lib.rs#L699-L703
-        //
-        // this results in overly long runtime paths on docs.rs, which then fail the build. it also
-        // causes sadness for users trying to build since the bindings may fail to build for the
-        // same reason (see https://github.com/jonhoo/rust-ibverbs/pull/41 for what was an
-        // incomplete fix).
-        //
-        // since we never actually _install_ anything when building here, we should be able to
-        // safely set this to any short path. simply by convention we set it to `/usr`.
-        .define("CMAKE_INSTALL_PREFIX", "/usr")
-        .no_build_target(true)
-        .build();
-    built_in
-        .into_os_string()
-        .into_string()
-        .expect("build directory path is not valid UTF-8")
+/// Configure the vendored rdma-core checkout with cmake and return the include directory it
+/// generates.
+///
+/// rdma-core publishes its public headers into the build tree at cmake *configure* time
+/// (`buildlib/publish_headers.cmake`), so configuring is all it takes to generate bindings from
+/// them; nothing is compiled, and the crate links the system `libibverbs` regardless.
+fn configure_vendored_rdma() -> PathBuf {
+    let build_dir =
+        PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is set by cargo")).join("rdma-core");
+    let cmake = env::var("CMAKE").unwrap_or_else(|_| "cmake".to_string());
+    eprintln!("run cmake (configure only)");
+    let output = Command::new(&cmake)
+        .arg("-S")
+        .arg("vendor/rdma-core")
+        .arg("-B")
+        .arg(&build_dir)
+        .arg("-DNO_MAN_PAGES=1")
+        .arg("-DNO_PYVERBS=1")
+        // never installed, but the configure step bakes the prefix into its output, and a long
+        // OUT_DIR-derived one used to overflow path limits on docs.rs (see #41)
+        .arg("-DCMAKE_INSTALL_PREFIX=/usr")
+        .output()
+        .unwrap_or_else(|e| {
+            panic!(
+                "failed to run `{cmake}` to configure vendor/rdma-core (is cmake installed?): {e}"
+            )
+        });
+    if !output.status.success() {
+        eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+        eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        panic!(
+            "cmake failed to configure vendor/rdma-core ({})",
+            output.status
+        );
+    }
+    build_dir.join("include")
 }
 
 fn update_submodule() {
@@ -115,34 +129,25 @@ fn main() {
     }
 
     // Every remaining path reads the vendored checkout, for the headers
-    // bindgen parses and, without the env overrides, the cmake build too.
+    // bindgen parses and, without the env overrides, the cmake configure too.
     println!("cargo:rerun-if-changed=vendor/rdma-core");
 
+    // Where `verbs.h`'s own includes (`<infiniband/verbs_api.h>` and friends) come from: either
+    // pre-generated rdma-core headers named by the caller, or the ones cmake generates from the
+    // vendored checkout.
     let rdma_core_include_dir = if let Ok(rdma_core_include_dir) = env::var("RDMA_CORE_INCLUDE_DIR")
     {
         let rdma_core_lib_dir = env::var("RDMA_CORE_LIB_DIR").expect(
             "When supplying RDMA_CORE_INCLUDE_DIR, you also need to supply RDMA_CORE_LIB_DIR",
         );
-        println!("cargo:include={rdma_core_include_dir}");
         println!("cargo:rustc-link-search=native={rdma_core_lib_dir}");
-        rdma_core_include_dir
+        PathBuf::from(rdma_core_include_dir)
     } else {
-        // build vendor/rdma-core
-        // note that we only build it to generate the bindings!
         update_submodule();
-        // `build_vendored_rdma` returns OUT_DIR; the cmake crate configures and
-        // builds into `{OUT_DIR}/build` and, with `no_build_target`, never runs
-        // the install step. rdma-core publishes its public headers into its
-        // *build* tree (`include/infiniband/...`), so that is the only include
-        // directory that exists here, and the built libraries live next to it.
-        // Pointing bindgen at it also guarantees the bindings are generated
-        // from the vendored checkout rather than from headers that happen to
-        // be installed under /usr/include on the build host.
-        let out_dir = build_vendored_rdma();
-        println!("cargo:include={out_dir}/build/include");
-        println!("cargo:rustc-link-search=native={out_dir}/build/lib");
-        format!("{out_dir}/build/include/")
+        configure_vendored_rdma()
     };
+    // exported to dependents as `DEP_IBVERBS_INCLUDE`
+    println!("cargo:include={}", rdma_core_include_dir.display());
 
     let ibverbs_header_dir = if let Ok(ibverbs_header_dir) = env::var("IBVERBS_HEADER_DIR") {
         ibverbs_header_dir
@@ -155,7 +160,7 @@ fn main() {
     eprintln!("run bindgen");
     let mut builder = bindgen::Builder::default()
         .header(format!("{ibverbs_header_dir}/verbs.h"))
-        .clang_arg(format!("-I{rdma_core_include_dir}"))
+        .clang_arg(format!("-I{}", rdma_core_include_dir.display()))
         .allowlist_function("ibv_.*")
         .allowlist_function("_ibv_.*")
         .allowlist_type("ibv_.*")
@@ -188,6 +193,9 @@ fn main() {
             non_exhaustive: false,
         })
         .derive_default(true)
+        // `ibv_qp_attr` gets a hand-written `Default` in lib.rs: bindgen's fallback zeroes the
+        // struct, but its `path_mtu` enum has no zero variant, so that would be an invalid value.
+        .no_default("ibv_qp_attr")
         .derive_debug(true)
         .prepend_enum_name(false)
         .blocklist_type("ibv_wc")
@@ -209,7 +217,9 @@ fn main() {
         builder = builder
             .header_contents("rdmacm_wrapper.h", "#include <rdma/rdma_cma.h>")
             .allowlist_function("rdma_.*")
-            .allowlist_type("rdma_.*");
+            .allowlist_type("rdma_.*")
+            // the `rdma_set_option` levels and option names are anonymous enums
+            .allowlist_var("RDMA_OPTION_.*");
     }
 
     let bindings = builder.generate().expect("Unable to generate bindings");

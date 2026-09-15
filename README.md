@@ -23,11 +23,12 @@ fn main() -> ibverbs::Result<()> {
     let cq = ctx.create_cq(16).build()?;
     let pd = ctx.alloc_pd()?;
 
-    // A reliable-connection (RC) queue pair on port 1. On RoCE, routing needs a GID; pick the
-    // index of a suitable entry from `ctx.gid_table()?`.
+    // A reliable-connection (RC) queue pair on port 1. On RoCE, routing needs a GID; take the
+    // port's routable entry (its IPv4 RoCE v2 one, when there is one).
+    let gid = ctx.routable_gid(1)?.expect("no GID on port 1");
     let prepared = pd
         .create_qp::<ibverbs::Rc>(&cq, &cq, 1)?
-        .set_gid_index(1)
+        .set_gid_index(gid.gid_index)
         .build()?;
 
     // Exchange endpoints with the peer out of band (`endpoint.to_bytes()` is the wire
@@ -47,11 +48,10 @@ fn main() -> ibverbs::Result<()> {
 
     let mut pending = 2;
     while pending > 0 {
-        if let Some(mut completions) = cq.poll()? {
-            while let Some(wc) = completions.next() {
-                wc.ok().expect("work request failed");
-                pending -= 1;
-            }
+        let mut completions = cq.poll()?;
+        while let Some(wc) = completions.next() {
+            wc.ok().expect("work request failed");
+            pending -= 1;
         }
     }
     assert_eq!(&recv.bytes_mut()[..5], b"hello");
@@ -123,8 +123,9 @@ This crate dynamically links `libibverbs`, which is part of
 `libibverbs-dev` for linking, on Debian and Ubuntu; `rdma-core` on Arch; `rdma-core-devel` on
 Fedora), plus `librdmacm` and `libefa` when the corresponding features are enabled.
 
-At build time, bindings are generated from a vendored `rdma-core` checkout, built automatically
-by the `ibverbs-sys` crate (this needs `cmake` and a C toolchain, but no RDMA packages). To use
+At build time, bindings are generated from a vendored `rdma-core` checkout, whose headers the
+`ibverbs-sys` crate generates by running `cmake`'s configure step (nothing is compiled, so this
+needs `cmake` and a C compiler for its probes, but no RDMA development packages). To use
 pre-built `rdma-core` headers instead, set `RDMA_CORE_INCLUDE_DIR` and `RDMA_CORE_LIB_DIR`. You do
 not need to depend on `ibverbs-sys` directly: it is re-exported as `ibverbs::ffi`.
 
@@ -163,7 +164,6 @@ $ sudo rdma link add rxe0 type rxe netdev <netdev>
 ```
 
 The examples (except the EFA one, which needs EFA hardware) and the integration test suite run
-against it unchanged, and CI does exactly this
-on every pull request: the data-path tests run against a SoftRoCE device and assert on the
-transferred bytes. A few tests cover paths the CI runner's rxe module mishandles (atomics,
-UC/UD, inline sends) and are skipped there; they pass on real hardware and current kernels.
+against it unchanged, and CI does exactly this on every pull request: the whole data-path suite
+(two-sided, one-sided, atomics, inline, UC/UD, and the connection manager) runs against a
+SoftRoCE device and asserts on the transferred bytes.

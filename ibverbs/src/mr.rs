@@ -56,6 +56,7 @@ impl AccessFlags {
 pub(crate) struct MemoryRegionInner {
     pub(crate) _pd: Arc<ProtectionDomainInner>,
     pub(crate) mr: *mut ffi::ibv_mr,
+    pub(crate) addr: u64,
 }
 
 unsafe impl Sync for MemoryRegionInner {}
@@ -76,6 +77,7 @@ impl Drop for MemoryRegionInner {
 /// Created by [`ProtectionDomain::allocate`](crate::ProtectionDomain::allocate) (the returned
 /// region owns its buffer), or by [`register_from_raw`](crate::ProtectionDomain::register_from_raw) /
 /// [`register_dmabuf`](crate::ProtectionDomain::register_dmabuf) for memory managed elsewhere.
+#[must_use = "the memory region is deregistered when dropped"]
 pub struct MemoryRegion<O> {
     pub(crate) inner: MemoryRegionInner,
     pub(crate) owner: O,
@@ -106,7 +108,7 @@ impl<O> MemoryRegion<O> {
     /// one-sided access.
     pub fn remote(&self) -> RemoteMemorySlice {
         RemoteMemorySlice {
-            addr: unsafe { *self.inner.mr }.addr as u64,
+            addr: self.inner.addr,
             len: unsafe { *self.inner.mr }.length,
             rkey: unsafe { *self.inner.mr }.rkey,
         }
@@ -127,11 +129,8 @@ impl<O> MemoryRegion<O> {
     ///
     /// Panics if `bounds` is empty or falls outside the region.
     pub fn slice(&self, bounds: impl RangeBounds<usize>) -> LocalMemorySlice {
-        let (addr, length) = calc_addr_len(
-            bounds,
-            unsafe { *self.inner.mr }.addr as u64,
-            unsafe { *self.inner.mr }.length,
-        );
+        let (addr, length) =
+            calc_addr_len(bounds, self.inner.addr, unsafe { *self.inner.mr }.length);
         let sge = ffi::ibv_sge {
             addr,
             length: length.try_into().unwrap(),

@@ -40,6 +40,7 @@ pub(crate) fn ceil_to_millis(remaining: Duration) -> Duration {
 /// Cloning is cheap (reference counted); the channel is destroyed once the last clone and every queue
 /// built on it are dropped.
 #[derive(Clone)]
+#[must_use]
 pub struct CompletionChannel {
     inner: Arc<CompletionChannelInner>,
 }
@@ -288,20 +289,22 @@ impl CompletionQueueBuilder {
             | ffi::ibv_create_cq_wc_flags::IBV_WC_EX_WITH_QP_NUM.0
             | ffi::ibv_create_cq_wc_flags::IBV_WC_EX_WITH_SRC_QP.0
             | self.wc_flags;
-        let mut cq_attr = ffi::ibv_cq_init_attr_ex {
-            cqe: self.min_cq_entries,
+        // Zero the attributes and write only the fields in use (`comp_mask`, `flags`, and
+        // `parent_domain` stay zero) rather than naming every field: rdma-core extends this struct
+        // over time, and an exhaustive literal stops compiling against newer headers.
+        let mut cq_attr = std::mem::MaybeUninit::<ffi::ibv_cq_init_attr_ex>::zeroed();
+        let p = cq_attr.as_mut_ptr();
+        unsafe {
+            (*p).cqe = self.min_cq_entries;
             // The cookie is a plain integer to the caller; the C ABI carries it as a pointer.
-            cq_context: self.cq_context as usize as *mut c_void,
-            channel: cc
+            (*p).cq_context = self.cq_context as usize as *mut c_void;
+            (*p).channel = cc
                 .as_ref()
-                .map_or(ptr::null_mut(), |channel| channel.as_raw()),
-            comp_vector: self.comp_vector,
-            wc_flags: wc_flags as u64,
-            comp_mask: 0,
-            flags: 0,
-            parent_domain: ptr::null_mut(),
-        };
-        let cq_ex = unsafe { ffi::ibv_create_cq_ex(self.ctx.ctx, &mut cq_attr as *mut _) };
+                .map_or(ptr::null_mut(), |channel| channel.as_raw());
+            (*p).comp_vector = self.comp_vector;
+            (*p).wc_flags = wc_flags as u64;
+        }
+        let cq_ex = unsafe { ffi::ibv_create_cq_ex(self.ctx.ctx, cq_attr.as_mut_ptr()) };
 
         if cq_ex.is_null() {
             Err(Error::os(
@@ -878,36 +881,149 @@ impl WorkCompletion<'_> {
                 .expect("completion queue did not request the DLID path bits")(self.cq)
         }
     }
+
+    /// The remote key a SEND-with-invalidate invalidated, if this completion reports one
+    /// ([`WcFlags::WITH_INV`]). It shares its field with the immediate data, so a completion
+    /// carries at most one of the two.
+    #[inline]
+    pub fn invalidated_rkey(&self) -> Option<u32> {
+        if self.ok().is_ok() && self.wc_flags().contains(WcFlags::WITH_INV) {
+            Some(unsafe { (*self.cq).read_imm_data.unwrap()(self.cq) })
+        } else {
+            None
+        }
+    }
+
+    /// The customer VLAN tag (802.1Q) of the incoming packet.
+    ///
+    /// Only valid on a completion queue that requested [`WcFields::CVLAN`] (see
+    /// [`CompletionQueueBuilder::set_wc_flags`]). Panics otherwise.
+    #[inline]
+    pub fn cvlan(&self) -> u16 {
+        unsafe {
+            (*self.cq)
+                .read_cvlan
+                .expect("completion queue did not request the customer VLAN")(self.cq)
+        }
+    }
+
+    /// The flow tag the device's steering rules attached to the incoming packet.
+    ///
+    /// Only valid on a completion queue that requested [`WcFields::FLOW_TAG`] (see
+    /// [`CompletionQueueBuilder::set_wc_flags`]). Panics otherwise.
+    #[inline]
+    pub fn flow_tag(&self) -> u32 {
+        unsafe {
+            (*self.cq)
+                .read_flow_tag
+                .expect("completion queue did not request the flow tag")(self.cq)
+        }
+    }
+
+    /// The tag-matching information of a tag-matching receive: the tag and the opaque user data
+    /// from the tag-matching header.
+    ///
+    /// Only valid on a completion queue that requested [`WcFields::TM_INFO`] (see
+    /// [`CompletionQueueBuilder::set_wc_flags`]). Panics otherwise.
+    #[inline]
+    pub fn tag_matching(&self) -> TagMatchingInfo {
+        let mut info = ffi::ibv_wc_tm_info::default();
+        unsafe {
+            (*self.cq)
+                .read_tm_info
+                .expect("completion queue did not request the tag-matching information")(
+                self.cq, &mut info,
+            )
+        };
+        TagMatchingInfo {
+            tag: info.tag,
+            private: info.priv_,
+        }
+    }
+
+    /// The raw extended completion queue, positioned on this entry: the escape hatch for the
+    /// `ibv_wc_read_*` readers this crate does not wrap. The position is only valid for this
+    /// entry, so do not keep the pointer past the [`WorkCompletion`].
+    pub fn as_raw(&self) -> *mut ffi::ibv_cq_ex {
+        self.cq
+    }
+
+    /// The addressing fields of this completion as a classic `ibv_wc`, for deriving the route
+    /// back to a datagram's sender: the flags, the source and local queue pair numbers, and — when
+    /// the queue requested them — the source LID, service level, and path bits (zero otherwise).
+    pub(crate) fn addressing(&self) -> ffi::ibv_wc {
+        let mut wc = ffi::ibv_wc::default();
+        wc.wc_flags = self.wc_flags().into();
+        wc.src_qp = self.src_qp();
+        wc.qp_num = self.qp_num();
+        unsafe {
+            if let Some(read_slid) = (*self.cq).read_slid {
+                wc.slid = read_slid(self.cq) as u16;
+            }
+            if let Some(read_sl) = (*self.cq).read_sl {
+                wc.sl = read_sl(self.cq);
+            }
+            if let Some(read_dlid_path_bits) = (*self.cq).read_dlid_path_bits {
+                wc.dlid_path_bits = read_dlid_path_bits(self.cq);
+            }
+        }
+        wc
+    }
 }
 
-/// An in-progress poll of a [`CompletionQueue`], yielding work completions one at a time.
+/// The tag-matching information of a receive on a tag-matching queue, read with
+/// [`WorkCompletion::tag_matching`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TagMatchingInfo {
+    /// The tag from the tag-matching header.
+    pub tag: u64,
+    /// The opaque user data from the tag-matching header.
+    pub private: u32,
+}
+
+/// One poll of a [`CompletionQueue`]: the work completions that were ready when it started,
+/// yielded one at a time.
 ///
 /// Created by [`CompletionQueue::poll`]. This is a *lending* iterator: each [`WorkCompletion`]
 /// borrows the `Completions`, so it must be dropped before the next [`next`](Completions::next)
-/// call (which is why it cannot implement [`Iterator`]). The completion queue is released
-/// (`ibv_end_poll`) when the `Completions` is dropped.
+/// call (which is why it cannot implement [`Iterator`]); [`for_each`](Self::for_each) runs a
+/// closure over the rest instead. The provider holds the queue's poll lock from the poll's start
+/// until the `Completions` is dropped (`ibv_end_poll`), so keep it short-lived; a poll of an
+/// empty queue holds nothing.
 #[must_use]
 pub struct Completions<'cq> {
     cq: *mut ffi::ibv_cq_ex,
+    /// Whether `start_poll` handed out an entry, and so `end_poll` is owed on drop; `false` for
+    /// a poll of an empty queue.
+    open: bool,
+    /// Whether the next entry is the one `start_poll` positioned on (not yet yielded).
     first: bool,
+    /// Whether the entries are exhausted (or the provider reported an error), so `next_poll`
+    /// must not be called again.
+    done: bool,
     _cq: std::marker::PhantomData<&'cq CompletionQueueInner>,
 }
 
 impl Completions<'_> {
-    /// Return the next work completion, or `None` once the queue has no more.
+    /// Return the next work completion, or `None` once the poll has no more.
     ///
     /// Consume with `while let Some(wc) = completions.next() { ... }`.
     ///
     /// `None` also ends the poll if the provider reports an error mid-poll (a rare provider-level
     /// failure, distinct from a completion *status* error, which is reported per work completion
-    /// through [`WorkCompletion::ok`]); resources are still released correctly in that case.
+    /// through [`WorkCompletion::ok`]); resources are still released correctly in that case, and
+    /// later calls keep returning `None`.
     #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn next(&mut self) -> Option<WorkCompletion<'_>> {
+        if self.done {
+            return None;
+        }
         if self.first {
             self.first = false;
         } else if unsafe { (*self.cq).next_poll.unwrap()(self.cq) } != 0 {
             // ENOENT (no more) or an error: either way the poll is finished.
+            self.done = true;
             return None;
         }
         Some(WorkCompletion {
@@ -915,11 +1031,24 @@ impl Completions<'_> {
             _iter: std::marker::PhantomData,
         })
     }
+
+    /// Run `f` on each remaining work completion, then release the queue.
+    ///
+    /// The closure form of the `while let` loop over [`next`](Self::next):
+    /// `cq.poll()?.for_each(|wc| ..)`.
+    #[inline]
+    pub fn for_each(mut self, mut f: impl FnMut(WorkCompletion<'_>)) {
+        while let Some(wc) = self.next() {
+            f(wc);
+        }
+    }
 }
 
 impl Drop for Completions<'_> {
     fn drop(&mut self) {
-        unsafe { (*self.cq).end_poll.unwrap()(self.cq) };
+        if self.open {
+            unsafe { (*self.cq).end_poll.unwrap()(self.cq) };
+        }
     }
 }
 
@@ -932,15 +1061,14 @@ pub struct CompletionQueue {
 }
 
 impl CompletionQueue {
-    /// Begin polling for work completions through the extended interface.
+    /// Poll for the work completions that are ready, through the extended interface.
     ///
-    /// Returns `None` if the queue is currently empty. The returned [`Completions`] is a lending
-    /// iterator whose [`WorkCompletion`]s read their fields lazily, so you only pay for the fields
-    /// you read.
+    /// The returned [`Completions`] is a lending iterator whose [`WorkCompletion`]s read their
+    /// fields lazily, so you only pay for the fields you read; it is empty when the queue is.
     ///
-    /// Callers must ensure the CQ does not overrun (exceed its capacity), as this triggers an
-    /// `IBV_EVENT_CQ_ERR` async event, rendering the CQ unusable. You can do this by limiting the
-    /// number of inflight work requests.
+    /// Callers must ensure the CQ does not overrun (exceed its [`capacity`](Self::capacity)), as
+    /// this triggers an `IBV_EVENT_CQ_ERR` async event, rendering the CQ unusable. You can do
+    /// this by limiting the number of inflight work requests.
     ///
     /// `poll` does not block or cause a context switch; to block until completions arrive, build
     /// the queue on a [`CompletionChannel`] and wait there instead of spinning on `poll` (see
@@ -956,29 +1084,38 @@ impl CompletionQueue {
     /// ```no_run
     /// # use ibverbs::CompletionQueue;
     /// # fn drain(cq: &CompletionQueue) -> ibverbs::Result<()> {
-    /// if let Some(mut completions) = cq.poll()? {
-    ///     while let Some(wc) = completions.next() {
-    ///         if let Err(e) = wc.ok() {
-    ///             eprintln!("work request {}: {e}", wc.wr_id());
-    ///         }
+    /// let mut completions = cq.poll()?;
+    /// while let Some(wc) = completions.next() {
+    ///     if let Err(e) = wc.ok() {
+    ///         eprintln!("work request {}: {e}", wc.wr_id());
     ///     }
     /// }
+    /// // Or, as a closure over the batch:
+    /// cq.poll()?.for_each(|wc| println!("work request {} completed", wc.wr_id()));
     /// # Ok(())
     /// # }
     /// ```
     #[inline]
-    pub fn poll(&self) -> Result<Option<Completions<'_>>> {
+    pub fn poll(&self) -> Result<Completions<'_>> {
         let cq = self.inner.cq_ex;
-        let mut attr = ffi::ibv_poll_cq_attr { comp_mask: 0 };
+        let mut attr = ffi::ibv_poll_cq_attr::default();
         // `start_poll` positions the CQ on the first completion; it returns ENOENT (and must not be
         // paired with `end_poll`) when the queue is empty.
         match unsafe { (*cq).start_poll.unwrap()(cq, &mut attr as *mut _) } {
-            0 => Ok(Some(Completions {
+            0 => Ok(Completions {
                 cq,
+                open: true,
                 first: true,
+                done: false,
                 _cq: std::marker::PhantomData,
-            })),
-            e if e == nix::libc::ENOENT => Ok(None),
+            }),
+            e if e == nix::libc::ENOENT => Ok(Completions {
+                cq,
+                open: false,
+                first: false,
+                done: true,
+                _cq: std::marker::PhantomData,
+            }),
             e => Err(Error::errno(e, Error::PollCompletionQueue)),
         }
     }
@@ -1071,6 +1208,14 @@ impl CompletionQueue {
     /// ([`CompletionQueueBuilder::set_comp_channel`]).
     pub fn comp_channel(&self) -> Option<&CompletionChannel> {
         self.inner.cc.as_ref()
+    }
+
+    /// The number of completions the queue can hold: the capacity the device granted, which is at
+    /// least the `min_cq_entries` asked of [`Context::create_cq`]. Keep fewer signaled work
+    /// requests in flight across the queue pairs sharing this queue, or it overruns
+    /// (`IBV_EVENT_CQ_ERR`) and stops working.
+    pub fn capacity(&self) -> u32 {
+        unsafe { (*self.inner.cq_ex).cqe }.max(0) as u32
     }
 
     /// Returns the underlying `ibv_cq` pointer.

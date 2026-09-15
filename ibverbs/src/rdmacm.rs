@@ -56,8 +56,12 @@
 //! events with [`poll_cm_event`]. You build the queue pair on the
 //! [`context`](CmId::context) the id resolves to and transition it with
 //! [`init_qp_attr`](CmId::init_qp_attr) plus
-//! [`QueuePair::modify`](crate::QueuePair::modify). The blocking helpers are written on top of this
-//! same API.
+//! [`QueuePair::modify`](crate::QueuePair::modify): on the active side `Init` before [`connect`],
+//! then — once the [`ConnectResponse`](CmEventType::ConnectResponse) has arrived — `Init` again
+//! (the attributes computed before the connection existed carry no remote-access flags),
+//! `ReadyToReceive`, `ReadyToSend`, and [`establish`](CmId::establish); on the passive side
+//! `Init`, `ReadyToReceive`, and `ReadyToSend` before [`accept`]. The blocking helpers are written
+//! on top of this same API.
 //!
 //! [`resolve_addr`]: CmId::resolve_addr
 //! [`connect`]: CmId::connect
@@ -68,7 +72,6 @@
 //! [`AsFd`]: std::os::fd::AsFd
 
 use std::io;
-use std::mem::MaybeUninit;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd};
 use std::os::raw::{c_int, c_void};
@@ -79,7 +82,9 @@ use std::time::{Duration, Instant};
 use nix::sys::socket::{SockaddrIn, SockaddrIn6, SockaddrLike};
 
 use crate::qp::QueuePairState;
-use crate::{Context, Error, PreparedQueuePair, QueuePair, QueuePairAttribute, Rc, Result};
+use crate::{
+    AckTimeout, Context, Error, PreparedQueuePair, QueuePair, QueuePairAttribute, Rc, Result,
+};
 
 /// The port space a connection-manager identifier lives in: which namespace its port numbers are
 /// allocated from, and which transport its connections use. Passed to [`Connector::new`],
@@ -326,6 +331,52 @@ fn timeout_ms(timeout: Duration) -> c_int {
     timeout.as_millis().min(c_int::MAX as u128) as c_int
 }
 
+/// The `RDMA_MAX_RESP_RES` / `RDMA_MAX_INIT_DEPTH` sentinels of `rdma_cma.h`: a connection
+/// parameter of this value means "whatever the connection manager negotiated", and the queue pair
+/// is left with the attributes `rdma_init_qp_attr` computed.
+const RDMA_MAX_RESP_RES: u8 = 0xFF;
+const RDMA_MAX_INIT_DEPTH: u8 = 0xFF;
+
+/// The most private-data bytes a connection request (`rdma_connect`) can carry in a port space:
+/// the InfiniBand CM REQ (92 bytes) or, for the datagram port spaces, SIDR REQ (216 bytes) payload,
+/// minus the 36-byte header the connection manager prepends in the IP-based port spaces.
+fn max_connect_private_data(ps: ffi::rdma_port_space) -> usize {
+    use ffi::rdma_port_space::*;
+    match ps {
+        RDMA_PS_TCP => 56,
+        RDMA_PS_IB => 92,
+        RDMA_PS_UDP | RDMA_PS_IPOIB => 180,
+    }
+}
+
+/// The most private-data bytes a reply (`rdma_accept`) can carry in a port space: the CM REP
+/// (196 bytes) or SIDR REP (136 bytes) payload.
+fn max_accept_private_data(ps: ffi::rdma_port_space) -> usize {
+    use ffi::rdma_port_space::*;
+    match ps {
+        RDMA_PS_TCP | RDMA_PS_IB => 196,
+        RDMA_PS_UDP | RDMA_PS_IPOIB => 136,
+    }
+}
+
+/// The most private-data bytes a rejection (`rdma_reject`) can carry: the CM REJ payload.
+const MAX_REJECT_PRIVATE_DATA: usize = 148;
+
+/// The blocking helpers only set up reliable connections; the datagram port spaces would make
+/// them wait for events that never come.
+fn require_connected_port_space(port_space: PortSpace, helper: &str) -> Result<()> {
+    match port_space {
+        PortSpace::Tcp | PortSpace::Ib => Ok(()),
+        _ => Err(Error::ConnectionSetup(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "{helper} only sets up reliable connections (PortSpace::Tcp or PortSpace::Ib); \
+                 drive a CmId directly for the datagram port spaces"
+            ),
+        ))),
+    }
+}
+
 /// Whether a connection-manager event reports a failure that aborts setup.
 fn is_failure(event: CmEventType) -> bool {
     matches!(
@@ -438,7 +489,11 @@ impl CmId {
         if ret != 0 {
             return Err(Error::ConnectionSetup(io::Error::last_os_error()));
         }
-        Ok(CmEvent { event })
+        Ok(CmEvent {
+            event,
+            _id: self.clone(),
+            taken: false,
+        })
     }
 
     /// Returns the next event on this id's channel, or `None` if none is currently pending.
@@ -459,7 +514,11 @@ impl CmId {
             }
             return Err(Error::ConnectionSetup(e));
         }
-        Ok(Some(CmEvent { event }))
+        Ok(Some(CmEvent {
+            event,
+            _id: self.clone(),
+            taken: false,
+        }))
     }
 
     /// Switches this id's event channel between blocking and non-blocking delivery.
@@ -496,19 +555,25 @@ impl CmId {
     /// [`ReadyToReceive`](QueuePairState::ReadyToReceive), and
     /// [`ReadyToSend`](QueuePairState::ReadyToSend) at the points the blocking helpers do (see the
     /// [module docs](self#low-level-control)) by calling this for each state and passing the
-    /// result to [`QueuePair::modify`](crate::QueuePair::modify).
+    /// result to [`QueuePair::modify`](crate::QueuePair::modify). On the active side, apply
+    /// `Init` a second time once the [`ConnectResponse`](CmEventType::ConnectResponse) has
+    /// arrived: before the connection exists the `Init` attributes carry no remote-access flags,
+    /// and only the second application grants the peer the RDMA access negotiated in the request.
     pub fn init_qp_attr(&self, target_state: QueuePairState) -> Result<QueuePairAttribute> {
-        let mut attr = MaybeUninit::<ffi::ibv_qp_attr>::zeroed();
-        // `rdma_init_qp_attr` reads the target state from the attribute and fills in the rest.
-        unsafe { (*attr.as_mut_ptr()).qp_state = target_state.into() };
+        // Start from the valid default (an all-zero `ibv_qp_attr` is not one: `path_mtu` has no
+        // zero variant). `rdma_init_qp_attr` reads the target state from the attribute and fills
+        // in the fields it reports in the mask.
+        let mut attr = ffi::ibv_qp_attr {
+            qp_state: target_state.into(),
+            ..Default::default()
+        };
         let mut mask: c_int = 0;
-        let ret = unsafe { ffi::rdma_init_qp_attr(self.inner.id, attr.as_mut_ptr(), &mut mask) };
+        let ret = unsafe { ffi::rdma_init_qp_attr(self.inner.id, &mut attr, &mut mask) };
         if ret != 0 {
             return Err(Error::ModifyQueuePair(io::Error::last_os_error()));
         }
-        // SAFETY: `rdma_init_qp_attr` succeeded, so it initialized `attr`.
         Ok(QueuePairAttribute::from_raw(
-            unsafe { attr.assume_init() },
+            attr,
             ffi::ibv_qp_attr_mask(mask as u32),
         ))
     }
@@ -541,23 +606,23 @@ impl CmId {
         Ok(Some(self.get_cm_event()?))
     }
 
-    /// Blocks until an `expected` event arrives (up to `deadline`), acknowledging and skipping any
-    /// others, and returning an error on a failure event or on an expired deadline. Drives the
-    /// blocking setup helpers.
-    fn wait_for(&self, expected: CmEventType, deadline: Option<Instant>) -> Result<()> {
+    /// Blocks until an `expected` event arrives (up to `deadline`) and returns it, acknowledging
+    /// and skipping any others, and returning an error on a failure event or on an expired
+    /// deadline. Drives the blocking setup helpers.
+    fn wait_for(&self, expected: CmEventType, deadline: Option<Instant>) -> Result<CmEvent> {
         loop {
             // This blocks on the channel's fd until an event arrives — it does not spin. The loop
             // only goes around to skip a non-matching event, re-blocking on the next read. Each
-            // event is acknowledged when it drops at the iteration end.
+            // skipped event is acknowledged when it drops at the iteration end.
             let Some(event) = self.get_cm_event_deadline(deadline)? else {
                 return Err(Error::TimedOut);
             };
             let kind = event.event_type();
             if kind == expected {
-                return Ok(());
+                return Ok(event);
             }
             if is_failure(kind) {
-                return Err(Error::ConnectionManager(kind));
+                return Err(event.into_error());
             }
         }
     }
@@ -619,8 +684,26 @@ impl CmId {
     /// [`CmEventType::ConnectResponse`] (external queue pair) or [`CmEventType::Established`]
     /// event is delivered. `param` carries the local queue pair number; set it with
     /// [`ConnectionParameter::set_qp_num`] to the number of the queue pair you built. After the
-    /// response, move the queue pair to `RTR`/`RTS` and call [`establish`](Self::establish).
+    /// response, apply the `Init` attributes again (see [`init_qp_attr`](Self::init_qp_attr)),
+    /// move the queue pair to `RTR`/`RTS`, and call [`establish`](Self::establish).
+    ///
+    /// # Errors
+    ///
+    ///  - [`Connect`](Error::Connect): `rdma_connect` failed, or the private data exceeds what a
+    ///    request can carry in this id's port space (56 bytes for [`PortSpace::Tcp`], 92 for
+    ///    [`PortSpace::Ib`], 180 for the datagram port spaces).
     pub fn connect(&self, param: &ConnectionParameter) -> Result<()> {
+        let limit = max_connect_private_data(self.port_space());
+        if usize::from(param.param.private_data_len) > limit {
+            return Err(Error::Connect(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "connection request private data is limited to {limit} bytes in this port \
+                     space, got {}",
+                    param.param.private_data_len
+                ),
+            )));
+        }
         // The raw struct's private-data pointer aims into `param`'s inline storage, which the
         // borrow keeps alive across the FFI call.
         let mut raw = param.as_raw();
@@ -635,13 +718,62 @@ impl CmId {
     /// [`CmEventType::ConnectRequest`]. Build and move the queue pair to `RTS` first; `param`
     /// carries its number, set with [`ConnectionParameter::set_qp_num`]. On success a
     /// [`CmEventType::Established`] event is delivered.
+    ///
+    /// # Errors
+    ///
+    ///  - [`Accept`](Error::Accept): `rdma_accept` failed, or the private data exceeds what a
+    ///    reply can carry in this id's port space (196 bytes for [`PortSpace::Tcp`] and
+    ///    [`PortSpace::Ib`], 136 for the datagram port spaces).
     pub fn accept(&self, param: &ConnectionParameter) -> Result<()> {
+        let limit = max_accept_private_data(self.port_space());
+        if usize::from(param.param.private_data_len) > limit {
+            return Err(Error::Accept(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "connection reply private data is limited to {limit} bytes in this port \
+                     space, got {}",
+                    param.param.private_data_len
+                ),
+            )));
+        }
         // The raw struct's private-data pointer aims into `param`'s inline storage, which the
         // borrow keeps alive across the FFI call.
         let mut raw = param.as_raw();
         let ret = unsafe { ffi::rdma_accept(self.inner.id, &mut raw) };
         if ret != 0 {
             return Err(Error::Accept(io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+
+    /// Declines a connection request (passive side), on the id taken from a
+    /// [`CmEventType::ConnectRequest`] with [`CmEvent::connection_request`]. The peer's connect
+    /// fails with [`CmEventType::Rejected`], carrying `private_data` (at most 148 bytes) for it to
+    /// read. Drop the id afterwards; it has no further use.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): `rdma_reject` failed, or `private_data`
+    ///    is longer than a rejection can carry.
+    pub fn reject(&self, private_data: &[u8]) -> Result<()> {
+        if private_data.len() > MAX_REJECT_PRIVATE_DATA {
+            return Err(Error::ConnectionSetup(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "rejection private data is limited to {MAX_REJECT_PRIVATE_DATA} bytes, got {}",
+                    private_data.len()
+                ),
+            )));
+        }
+        let ret = unsafe {
+            ffi::rdma_reject(
+                self.inner.id,
+                private_data.as_ptr().cast::<c_void>(),
+                private_data.len() as u8,
+            )
+        };
+        if ret != 0 {
+            return Err(Error::ConnectionSetup(io::Error::last_os_error()));
         }
         Ok(())
     }
@@ -658,8 +790,92 @@ impl CmId {
 
     /// Disconnects an established connection, delivering [`CmEventType::Disconnected`] to both
     /// sides.
+    ///
+    /// The queue pair is not touched: it is not attached to the id, so `rdma_disconnect` does not
+    /// move it to the error state the way it would a connection-manager-created one. Do that
+    /// yourself with [`QueuePair::modify`] so outstanding work requests are flushed (the blocking
+    /// [`Connection::disconnect`] does).
     pub fn disconnect(&self) -> Result<()> {
         let ret = unsafe { ffi::rdma_disconnect(self.inner.id) };
+        if ret != 0 {
+            return Err(Error::ConnectionSetup(io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+
+    /// Set an `RDMA_OPTION_ID`-level option (`rdma_set_option`) to `value`.
+    fn set_id_option<T>(&self, option: c_int, mut value: T) -> Result<()> {
+        let ret = unsafe {
+            ffi::rdma_set_option(
+                self.inner.id,
+                ffi::RDMA_OPTION_ID as c_int,
+                option,
+                (&mut value as *mut T).cast::<c_void>(),
+                std::mem::size_of::<T>(),
+            )
+        };
+        if ret != 0 {
+            return Err(Error::ConnectionSetup(io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+
+    /// Set the type of service of this id's traffic: the IP DSCP/ToS byte (RFC 2474) its packets
+    /// carry, which the network maps to a priority or a lossless class. Set it before resolving
+    /// the address (active side) or binding (passive side).
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): `rdma_set_option` failed.
+    pub fn set_tos(&self, tos: u8) -> Result<()> {
+        self.set_id_option(ffi::RDMA_OPTION_ID_TOS as c_int, tos)
+    }
+
+    /// Allow the local address to be shared, like `SO_REUSEADDR`: another id with the same
+    /// setting may bind the same address and port. Set it before binding.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): `rdma_set_option` failed.
+    pub fn set_reuse_addr(&self, reuse: bool) -> Result<()> {
+        self.set_id_option(ffi::RDMA_OPTION_ID_REUSEADDR as c_int, c_int::from(reuse))
+    }
+
+    /// Restrict an id bound to an IPv6 address to IPv6 peers, like `IPV6_V6ONLY`, instead of
+    /// also serving IPv4 ones through IPv4-mapped addresses. Set it before binding.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): `rdma_set_option` failed.
+    pub fn set_af_only(&self, only: bool) -> Result<()> {
+        self.set_id_option(ffi::RDMA_OPTION_ID_AFONLY as c_int, c_int::from(only))
+    }
+
+    /// Set the ACK timeout of the connection's queue pair, overriding the one the connection
+    /// manager derives from the route. Set it before connecting or accepting.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): `rdma_set_option` failed.
+    pub fn set_ack_timeout(&self, timeout: AckTimeout) -> Result<()> {
+        self.set_id_option(ffi::RDMA_OPTION_ID_ACK_TIMEOUT as c_int, timeout.exponent())
+    }
+
+    /// Tell the connection manager that the queue pair saw the peer's first message arrive
+    /// (`rdma_notify` with `IBV_EVENT_COMM_EST`).
+    ///
+    /// With an external queue pair, the device reports that arrival as an `IBV_EVENT_COMM_EST`
+    /// asynchronous event on the queue pair ([`Context::wait_async_event`]), which the connection
+    /// manager cannot see on its own; forwarding it here lets the passive side treat the
+    /// connection as established when the peer's ready-to-use message was lost.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): `rdma_notify` failed (for example
+    ///    `EISCONN` when the connection is already established).
+    pub fn notify_established(&self) -> Result<()> {
+        let ret =
+            unsafe { ffi::rdma_notify(self.inner.id, ffi::ibv_event_type::IBV_EVENT_COMM_EST) };
         if ret != 0 {
             return Err(Error::ConnectionSetup(io::Error::last_os_error()));
         }
@@ -689,6 +905,11 @@ impl CmId {
         self.inner.id
     }
 
+    /// The port space this id was created in.
+    fn port_space(&self) -> ffi::rdma_port_space {
+        unsafe { (*self.inner.id).ps }
+    }
+
     /// The device context the connection manager bound this id to (its `verbs`). Only available once
     /// the address has resolved.
     fn verbs(&self) -> Result<*mut ffi::ibv_context> {
@@ -710,9 +931,26 @@ impl CmId {
     }
 
     /// Moves `qp` from `INIT` through `RTR` to `RTS`, completing the connection-manager transition.
-    fn ready(&self, qp: &mut QueuePair<Rc>) -> Result<()> {
-        self.transition(qp, QueuePairState::ReadyToReceive)?;
-        self.transition(qp, QueuePairState::ReadyToSend)
+    ///
+    /// Like librdmacm, `responder_resources` and `initiator_depth` override the outstanding-RDMA
+    /// limits the connection manager computed (`max_dest_rd_atomic` at `RTR`, `max_rd_atomic` at
+    /// `RTS`), so the queue pair is configured with the values this side advertises in its reply.
+    fn ready(
+        &self,
+        qp: &mut QueuePair<Rc>,
+        responder_resources: Option<u8>,
+        initiator_depth: Option<u8>,
+    ) -> Result<()> {
+        let mut rtr = self.init_qp_attr(QueuePairState::ReadyToReceive)?;
+        if let Some(responder_resources) = responder_resources {
+            rtr.set_max_dest_rd_atomic(responder_resources);
+        }
+        qp.modify(&rtr)?;
+        let mut rts = self.init_qp_attr(QueuePairState::ReadyToSend)?;
+        if let Some(initiator_depth) = initiator_depth {
+            rts.set_max_rd_atomic(initiator_depth);
+        }
+        qp.modify(&rts)
     }
 
     /// Transitions `qp` to `state` using the attributes the connection manager computes from the
@@ -742,20 +980,45 @@ impl AsFd for CmId {
 
 /// A connection-manager event, retrieved with [`CmId::get_cm_event`]/[`CmId::poll_cm_event`] and
 /// acknowledged automatically when dropped.
+///
+/// The event keeps the id whose channel delivered it alive: `rdma_destroy_id` blocks until every
+/// event delivered for an id has been acknowledged, so the id cannot go away underneath an
+/// outstanding event. A [`ConnectRequest`](CmEventType::ConnectRequest) whose new id is never
+/// taken with [`connection_request`](Self::connection_request) is rejected on drop, so the peer
+/// learns right away rather than after its retries time out.
 pub struct CmEvent {
     event: *mut ffi::rdma_cm_event,
+    /// The id whose channel delivered the event (the listener, for a connection request).
+    _id: CmId,
+    /// Whether a connection request's new id has been taken over by
+    /// [`connection_request`](Self::connection_request).
+    taken: bool,
 }
 
+// The event (and the id it holds, which is `Send + Sync` itself) can move between threads:
+// librdmacm does not care which thread acknowledges an event.
+unsafe impl Send for CmEvent {}
+
 impl CmEvent {
+    /// The failure this event reports, for the blocking helpers to return.
+    fn into_error(self) -> Error {
+        Error::ConnectionManager {
+            event: self.event_type(),
+            status: self.status(),
+            private_data: self.private_data().map_or_else(Vec::new, <[u8]>::to_vec),
+        }
+    }
+
     /// The kind of event. Match on the [`CmEventType`] to decide what to do next; see [`CmId`] for
     /// the expected sequence.
     pub fn event_type(&self) -> CmEventType {
         unsafe { (*self.event).event }.into()
     }
 
-    /// The event's status: `0` on success, otherwise a negative errno (for connection-error and
-    /// rejected events) or a transport-specific value. Informational; the setup steps already turn
-    /// failure events into errors.
+    /// The event's status: `0` on success, otherwise a negative errno (for address, route, and
+    /// connection errors) or a transport-specific value (the reject reason for
+    /// [`Rejected`](CmEventType::Rejected)). The blocking helpers carry it in
+    /// [`Error::ConnectionManager`].
     pub fn status(&self) -> i32 {
         unsafe { (*self.event).status }
     }
@@ -796,15 +1059,30 @@ impl CmEvent {
     /// on return.
     ///
     /// The returned id is the passive side of the new connection: build a queue pair on its
-    /// [`context`](CmId::context), move it to `RTS`, and [`accept`](CmId::accept).
-    pub fn connection_request(self) -> Result<CmId> {
+    /// [`context`](CmId::context), move it to `RTS`, and [`accept`](CmId::accept) — or
+    /// [`reject`](CmId::reject) it.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): this is not a connection request, or its
+    ///    id could not be moved onto a new event channel (the request is then rejected).
+    pub fn connection_request(mut self) -> Result<CmId> {
+        if self.event_type() != CmEventType::ConnectRequest {
+            return Err(Error::ConnectionSetup(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("not a connection request: {}", self.event_type()),
+            )));
+        }
         let channel = EventChannel::new()?;
         let id = unsafe { (*self.event).id };
+        // From here on the id is ours to release: `Drop` must no longer reject and destroy it.
+        self.taken = true;
         let ret = unsafe { ffi::rdma_migrate_id(id, channel.chan) };
         if ret != 0 {
+            let err = io::Error::last_os_error();
             // The request id is ours to destroy once we abandon it; `channel` drops after.
             unsafe { ffi::rdma_destroy_id(id) };
-            return Err(Error::ConnectionSetup(io::Error::last_os_error()));
+            return Err(Error::ConnectionSetup(err));
         }
         Ok(CmId {
             inner: Arc::new(CmIdInner { channel, id }),
@@ -814,13 +1092,28 @@ impl CmEvent {
 
 impl Drop for CmEvent {
     fn drop(&mut self) {
-        unsafe { ffi::rdma_ack_cm_event(self.event) };
+        unsafe {
+            if !self.taken
+                && (*self.event).event == ffi::rdma_cm_event_type::RDMA_CM_EVENT_CONNECT_REQUEST
+            {
+                // Nobody took the new connection's id: decline the request and free the id
+                // librdmacm allocated for it, which only `rdma_destroy_id` releases (the event is
+                // charged to the listener, so destroying the new id does not wait on it).
+                let id = (*self.event).id;
+                ffi::rdma_reject(id, ptr::null(), 0);
+                ffi::rdma_ack_cm_event(self.event);
+                ffi::rdma_destroy_id(id);
+            } else {
+                ffi::rdma_ack_cm_event(self.event);
+            }
+        }
     }
 }
 
-/// The most private-data bytes a connection request can carry: `rdma_connect`'s limit for a
-/// reliable connection, once the connection manager's own wire header is accounted for.
-const MAX_PRIVATE_DATA: usize = 56;
+/// The most private-data bytes any connection-manager call accepts (a reply's, see
+/// [`max_accept_private_data`]); [`CmId::connect`] and [`CmId::accept`] enforce the tighter
+/// per-call limits.
+const MAX_PRIVATE_DATA: usize = 196;
 
 /// Parameters for connecting and accepting.
 ///
@@ -891,15 +1184,19 @@ impl ConnectionParameter {
     }
 
     /// Sets the application payload carried inside the connection request or reply, for the peer
-    /// to read with [`CmEvent::private_data`] — typically a protocol version, a token, or
-    /// bootstrap parameters that save a round trip.
+    /// to read with [`Incoming::peer_private_data`] / [`Connection::peer_private_data`] (or
+    /// [`CmEvent::private_data`]) — typically a protocol version, a token, or bootstrap parameters
+    /// that save a round trip.
     ///
-    /// At most 56 bytes, the `rdma_connect` limit for a reliable connection. The bytes are copied
-    /// into the parameter.
+    /// How much fits depends on the call and port space: a request ([`Resolved::connect`] /
+    /// [`CmId::connect`]) carries at most 56 bytes in [`PortSpace::Tcp`] (92 in
+    /// [`PortSpace::Ib`], 180 in the datagram port spaces), a reply ([`Incoming::accept`] /
+    /// [`CmId::accept`]) up to 196 (136 in the datagram port spaces); those calls fail with an
+    /// error when the data does not fit. The bytes are copied into the parameter.
     ///
     /// # Panics
     ///
-    /// Panics if `data` is longer than 56 bytes.
+    /// Panics if `data` is longer than 196 bytes, more than any call accepts.
     pub fn set_private_data(mut self, data: &[u8]) -> Self {
         assert!(
             data.len() <= MAX_PRIVATE_DATA,
@@ -927,16 +1224,30 @@ impl ConnectionParameter {
 
 /// Active-side blocking connection setup. Created by [`Connector::new`]; drives address and route
 /// resolution, then yields a [`Resolved`] from which you build a queue pair and connect.
+#[must_use]
 pub struct Connector {
     id: CmId,
 }
 
 impl Connector {
     /// Creates a connector with its own event channel.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): creating the id failed, or `port_space`
+    ///    is a datagram port space ([`Udp`](PortSpace::Udp) / [`Ipoib`](PortSpace::Ipoib)): the
+    ///    blocking helpers set up reliable connections only.
     pub fn new(port_space: PortSpace) -> Result<Self> {
+        require_connected_port_space(port_space, "Connector")?;
         Ok(Connector {
             id: CmId::create(port_space)?,
         })
+    }
+
+    /// The underlying id, for options that must be set before resolving ([`CmId::set_tos`],
+    /// [`CmId::set_ack_timeout`]).
+    pub fn cm_id(&self) -> &CmId {
+        &self.id
     }
 
     /// Resolves the destination address and route (blocking until both complete), then returns a
@@ -955,6 +1266,7 @@ impl Connector {
 
 /// A resolved active connection, ready for its queue pair to be built and connected. Returned by
 /// [`Connector::resolve`].
+#[must_use = "a resolved connection is abandoned when dropped; finish it with `connect`"]
 pub struct Resolved {
     id: CmId,
 }
@@ -966,11 +1278,26 @@ impl Resolved {
         self.id.context()
     }
 
+    /// The underlying id: the resolved route's addresses, and the options that must be set before
+    /// connecting ([`CmId::set_ack_timeout`]).
+    pub fn cm_id(&self) -> &CmId {
+        &self.id
+    }
+
     /// Connects to the remote (blocking) using `qp`, returning the established [`Connection`]. The
     /// queue pair number in `param` is set automatically.
     ///
     /// `timeout` bounds how long to wait for the remote's response: on expiry
     /// [`TimedOut`](Error::TimedOut) is returned, and `None` waits indefinitely.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionManager`](Error::ConnectionManager): the peer rejected the request (with
+    ///    its reject reason and private data), or was unreachable.
+    ///  - [`Connect`](Error::Connect): `rdma_connect` failed, or the private data does not fit a
+    ///    request (see [`ConnectionParameter::set_private_data`]).
+    ///  - [`ModifyQueuePair`](Error::ModifyQueuePair): a queue-pair transition failed.
+    ///  - [`TimedOut`](Error::TimedOut): the response did not arrive in time.
     pub fn connect(
         self,
         qp: PreparedQueuePair<Rc>,
@@ -981,27 +1308,79 @@ impl Resolved {
         let mut qp = self.id.init_qp(qp)?;
         let param = param.set_qp_num(qp.qp_num());
         self.id.connect(&param)?;
-        self.id.wait_for(CmEventType::ConnectResponse, deadline)?;
-        self.id.ready(&mut qp)?;
+        let response = self.id.wait_for(CmEventType::ConnectResponse, deadline)?;
+        let private_data = response
+            .private_data()
+            .map_or_else(Vec::new, <[u8]>::to_vec);
+        drop(response);
+        // The `INIT` attributes applied before connecting carried no remote-access flags (there
+        // was no connection to derive them from); now there is one, so apply `INIT` again — as
+        // librdmacm does — before moving on. The RDMA limits come from the negotiated reply.
+        self.id.transition(&mut qp, QueuePairState::Init)?;
+        self.id.ready(&mut qp, None, None)?;
         self.id.establish()?;
-        Ok(Connection { id: self.id, qp })
+        Ok(Connection {
+            id: self.id,
+            qp,
+            private_data,
+        })
     }
 }
 
 /// Passive-side blocking connection setup. Created by [`Acceptor::bind`]; listens for and accepts
 /// incoming connections.
+#[must_use]
 pub struct Acceptor {
     listener: CmId,
 }
 
 impl Acceptor {
-    /// Binds to `addr` (use an unspecified address such as `0.0.0.0:port` for any device) and starts
+    /// Binds to `addr` (use an unspecified address such as `0.0.0.0:port` for any device, and
+    /// port 0 for an ephemeral port, read back with [`local_addr`](Self::local_addr)) and starts
     /// listening, queueing up to `backlog` pending connections.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): creating the id or listening failed, or
+    ///    `port_space` is a datagram port space ([`Udp`](PortSpace::Udp) /
+    ///    [`Ipoib`](PortSpace::Ipoib)): the blocking helpers set up reliable connections only.
+    ///  - [`BindAddress`](Error::BindAddress): `rdma_bind_addr` failed, for example because no
+    ///    RDMA device answers to `addr`.
     pub fn bind(addr: SocketAddr, port_space: PortSpace, backlog: u32) -> Result<Self> {
+        Self::bind_with(addr, port_space, backlog, |_| Ok(()))
+    }
+
+    /// As [`bind`](Self::bind), running `configure` on the listener's id before it binds: the
+    /// place for the options that must precede binding ([`CmId::set_reuse_addr`],
+    /// [`CmId::set_af_only`], [`CmId::set_tos`]).
+    ///
+    /// # Errors
+    ///
+    /// Those of [`bind`](Self::bind), plus whatever `configure` returns.
+    pub fn bind_with(
+        addr: SocketAddr,
+        port_space: PortSpace,
+        backlog: u32,
+        configure: impl FnOnce(&CmId) -> Result<()>,
+    ) -> Result<Self> {
+        require_connected_port_space(port_space, "Acceptor")?;
         let listener = CmId::create(port_space)?;
+        configure(&listener)?;
         listener.bind_addr(addr)?;
         listener.listen(backlog)?;
         Ok(Acceptor { listener })
+    }
+
+    /// The listening id.
+    pub fn cm_id(&self) -> &CmId {
+        &self.listener
+    }
+
+    /// The local address the acceptor listens on: the address passed to [`bind`](Self::bind),
+    /// with the port the connection manager assigned when that was 0. `None` if the address
+    /// family is neither IPv4 nor IPv6.
+    pub fn local_addr(&self) -> Option<SocketAddr> {
+        self.listener.local_addr()
     }
 
     /// Blocks until the next connection request arrives and returns it, moved onto its own event
@@ -1010,16 +1389,28 @@ impl Acceptor {
     ///
     /// `timeout` bounds how long to wait for a request: on expiry [`TimedOut`](Error::TimedOut)
     /// is returned, and `None` waits indefinitely.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionManager`](Error::ConnectionManager): the listener reported a failure (its
+    ///    device was removed).
+    ///  - [`TimedOut`](Error::TimedOut): no request arrived in time.
     pub fn accept(&self, timeout: Option<Duration>) -> Result<Incoming> {
         let deadline = timeout.map(|timeout| Instant::now() + timeout);
         loop {
             let Some(event) = self.listener.get_cm_event_deadline(deadline)? else {
                 return Err(Error::TimedOut);
             };
-            if event.event_type() == CmEventType::ConnectRequest {
+            let kind = event.event_type();
+            if kind == CmEventType::ConnectRequest {
+                let private_data = event.private_data().map_or_else(Vec::new, <[u8]>::to_vec);
                 return Ok(Incoming {
                     id: event.connection_request()?,
+                    private_data,
                 });
+            }
+            if is_failure(kind) {
+                return Err(event.into_error());
             }
             // Only connection requests matter here; anything else is acknowledged and ignored
             // when `event` drops.
@@ -1027,11 +1418,13 @@ impl Acceptor {
     }
 }
 
-/// An incoming connection request, ready for its queue pair to be built and accepted. Returned by
-/// [`Acceptor::accept`]. It carries its own event channel, so it is self-contained and can be
-/// handed to another thread.
+/// An incoming connection request, ready for its queue pair to be built and accepted (or
+/// rejected). Returned by [`Acceptor::accept`]. It carries its own event channel, so it is
+/// self-contained and can be handed to another thread. Dropping it declines the request.
+#[must_use = "dropping an incoming request declines it; `accept` or `reject` it"]
 pub struct Incoming {
     id: CmId,
+    private_data: Vec<u8>,
 }
 
 impl Incoming {
@@ -1041,11 +1434,37 @@ impl Incoming {
         self.id.context()
     }
 
+    /// The request's id: the peer's address, and the options that must be set before accepting
+    /// ([`CmId::set_ack_timeout`]).
+    pub fn cm_id(&self) -> &CmId {
+        &self.id
+    }
+
+    /// The private data the peer attached to its request
+    /// ([`ConnectionParameter::set_private_data`]), as reported by the transport: padded to its
+    /// wire format, so typically longer than what the peer wrote, with the tail zero-filled.
+    /// Empty when the peer attached none.
+    pub fn peer_private_data(&self) -> &[u8] {
+        &self.private_data
+    }
+
     /// Accepts the connection (blocking) using `qp`, returning the established [`Connection`]. The
-    /// queue pair number in `param` is set automatically.
+    /// queue pair number in `param` is set automatically, and the queue pair is configured with
+    /// the outstanding-RDMA limits `param` advertises to the peer
+    /// ([`set_responder_resources`](ConnectionParameter::set_responder_resources) /
+    /// [`set_initiator_depth`](ConnectionParameter::set_initiator_depth)).
     ///
     /// `timeout` bounds how long to wait for the connection to establish: on expiry
     /// [`TimedOut`](Error::TimedOut) is returned, and `None` waits indefinitely.
+    ///
+    /// # Errors
+    ///
+    ///  - [`Accept`](Error::Accept): `rdma_accept` failed, or the private data does not fit a
+    ///    reply (see [`ConnectionParameter::set_private_data`]).
+    ///  - [`ConnectionManager`](Error::ConnectionManager): the peer gave up before the connection
+    ///    was established.
+    ///  - [`ModifyQueuePair`](Error::ModifyQueuePair): a queue-pair transition failed.
+    ///  - [`TimedOut`](Error::TimedOut): the connection was not established in time.
     pub fn accept(
         self,
         qp: PreparedQueuePair<Rc>,
@@ -1054,20 +1473,46 @@ impl Incoming {
     ) -> Result<Connection> {
         let deadline = timeout.map(|timeout| Instant::now() + timeout);
         let mut qp = self.id.init_qp(qp)?;
-        self.id.ready(&mut qp)?;
+        let responder_resources = (param.param.responder_resources != RDMA_MAX_RESP_RES)
+            .then_some(param.param.responder_resources);
+        let initiator_depth = (param.param.initiator_depth != RDMA_MAX_INIT_DEPTH)
+            .then_some(param.param.initiator_depth);
+        self.id
+            .ready(&mut qp, responder_resources, initiator_depth)?;
         let param = param.set_qp_num(qp.qp_num());
         self.id.accept(&param)?;
         self.id.wait_for(CmEventType::Established, deadline)?;
-        Ok(Connection { id: self.id, qp })
+        Ok(Connection {
+            id: self.id,
+            qp,
+            private_data: self.private_data,
+        })
+    }
+
+    /// Declines the request instead of accepting it. The peer's connect fails with
+    /// [`CmEventType::Rejected`] and can read `private_data` (at most 148 bytes) from the error.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): `rdma_reject` failed, or `private_data`
+    ///    is longer than a rejection can carry.
+    pub fn reject(self, private_data: &[u8]) -> Result<()> {
+        self.id.reject(private_data)
     }
 }
 
 /// An established connection: a connected [`QueuePair`] plus the connection-manager
-/// identifier that keeps it alive. Returned by [`Resolved::connect`] / [`Incoming::accept`];
-/// dropping it tears the connection down.
+/// identifier that keeps it alive. Returned by [`Resolved::connect`] / [`Incoming::accept`].
+///
+/// Dropping it disconnects (the peer sees [`CmEventType::Disconnected`]) and destroys the queue
+/// pair; [`disconnect`](Self::disconnect) does the same while keeping the queue pair around to
+/// reap the flushed completions.
+#[must_use = "dropping a connection disconnects it"]
 pub struct Connection {
     id: CmId,
     qp: QueuePair<Rc>,
+    /// The private data the peer attached to its request (passive side) or reply (active side).
+    private_data: Vec<u8>,
 }
 
 impl Connection {
@@ -1077,10 +1522,37 @@ impl Connection {
         &mut self.qp
     }
 
-    /// Disconnects the connection. The peer is notified with a [`CmEventType::Disconnected`]
-    /// event.
-    pub fn disconnect(&self) -> Result<()> {
-        self.id.disconnect()
+    /// The connection's id, to watch what happens to it after establishment — the peer
+    /// disconnecting ([`CmEventType::Disconnected`]), the device going away, the timewait exit —
+    /// with [`CmId::get_cm_event`] or, non-blocking, [`CmId::poll_cm_event`].
+    pub fn cm_id(&self) -> &CmId {
+        &self.id
+    }
+
+    /// The private data the peer attached to its connection request (on the accepting side) or
+    /// its reply (on the connecting side), as reported by the transport: padded to its wire
+    /// format, so typically longer than what the peer wrote, with the tail zero-filled. Empty
+    /// when the peer attached none.
+    pub fn peer_private_data(&self) -> &[u8] {
+        &self.private_data
+    }
+
+    /// Disconnects the connection and moves the queue pair to the error state, so every
+    /// outstanding work request completes with
+    /// [`WorkRequestFlushed`](crate::WcStatus::WorkRequestFlushed) on its completion queue. The
+    /// peer is notified with a [`CmEventType::Disconnected`] event.
+    ///
+    /// # Errors
+    ///
+    ///  - [`ConnectionSetup`](Error::ConnectionSetup): `rdma_disconnect` failed (for example
+    ///    because the connection is already down).
+    ///  - [`ModifyQueuePair`](Error::ModifyQueuePair): moving the queue pair to the error state
+    ///    failed.
+    pub fn disconnect(&mut self) -> Result<()> {
+        self.id.disconnect()?;
+        let mut error = QueuePairAttribute::new();
+        error.set_state(QueuePairState::Error);
+        self.qp.modify(&error)
     }
 
     /// The IP address and port of the remote end of this connection, or `None` if its address
@@ -1093,6 +1565,16 @@ impl Connection {
     /// neither IPv4 nor IPv6.
     pub fn local_addr(&self) -> Option<SocketAddr> {
         self.id.local_addr()
+    }
+}
+
+impl Drop for Connection {
+    fn drop(&mut self) {
+        // Tell the peer now: the id itself is only destroyed (which would also send the
+        // disconnect) once every resource built on the borrowed device context has gone, which
+        // can be much later. Fails harmlessly if already disconnected. The queue pair is destroyed
+        // right after this, which flushes it.
+        let _ = self.id.disconnect();
     }
 }
 

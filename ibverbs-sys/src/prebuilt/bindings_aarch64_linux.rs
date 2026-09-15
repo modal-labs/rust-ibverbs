@@ -2959,15 +2959,6 @@ const _: () = {
     ["Offset of field: ibv_qp_attr::rate_limit"]
         [::std::mem::offset_of!(ibv_qp_attr, rate_limit) - 136usize];
 };
-impl Default for ibv_qp_attr {
-    fn default() -> Self {
-        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
-        unsafe {
-            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
-            s.assume_init()
-        }
-    }
-}
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct ibv_qp_rate_limit_attr {

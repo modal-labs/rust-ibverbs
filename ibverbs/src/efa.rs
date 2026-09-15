@@ -16,7 +16,7 @@ use crate::error::{Error, Result};
 use crate::mr::{LocalMemorySlice, RemoteMemorySlice};
 use crate::pd::ProtectionDomain;
 use crate::qp::{
-    sealed, AddressedSendOp, Datagram, PreparedQueuePair, QueuePair, QueuePairBuilder,
+    sealed, AddressedSendOp, Datagram, Payload, PreparedQueuePair, QueuePair, QueuePairBuilder,
     QueuePairType, Transport,
 };
 
@@ -64,14 +64,13 @@ impl QueuePairBuilder<Srd> {
     ///
     ///  - [`CreateQueuePair`](Error::CreateQueuePair): `efadv_create_qp_ex` failed (`EINVAL` for
     ///    an invalid value in the queue pair attributes, `ENOMEM` when out of resources).
+    ///  - [`Unsupported`](Error::Unsupported): the provider declined the requested send
+    ///    operations (`EOPNOTSUPP`), or created the queue pair without the extended work-request
+    ///    interface this crate posts through (`ibv_qp_to_qp_ex` returned no handle).
     pub fn build(&self) -> Result<PreparedQueuePair<Srd>> {
-        use ffi::ibv_qp_create_send_ops_flags as SendOps;
-        // SRD supports send and one-sided RDMA, including the immediate variants.
-        let send_ops_flags = SendOps::IBV_QP_EX_WITH_SEND.0
-            | SendOps::IBV_QP_EX_WITH_SEND_WITH_IMM.0
-            | SendOps::IBV_QP_EX_WITH_RDMA_WRITE.0
-            | SendOps::IBV_QP_EX_WITH_RDMA_WRITE_WITH_IMM.0
-            | SendOps::IBV_QP_EX_WITH_RDMA_READ.0;
+        // SRD supports send and one-sided RDMA, including the immediate variants (the transport's
+        // default set), or whatever the builder was told to request instead.
+        let send_ops_flags = self.send_ops().0;
 
         // As in the generic `build_impl` in qp.rs: zero the storage and write only the fields the
         // driver reads, handing the pointer to C without `assume_init` (the `qp_type` enum has no
@@ -96,26 +95,29 @@ impl QueuePairBuilder<Srd> {
             (*p).send_ops_flags = send_ops_flags as u64;
         }
 
-        let mut efa_attr = ffi::efadv_qp_init_attr {
-            comp_mask: 0,
-            driver_qp_type: ffi::EFADV_QP_DRIVER_TYPE_SRD as u32,
-            flags: 0,
-            sl: 0,
-            reserved: 0,
-        };
+        // Zero the EFA attributes and set only the driver queue-pair type rather than naming every
+        // field: rdma-core adds fields to this struct over time (64.0 added `wr_flags`), and the
+        // provider reads only as much as the passed-in length covers.
+        let mut efa_attr = std::mem::MaybeUninit::<ffi::efadv_qp_init_attr>::zeroed();
+        unsafe {
+            (*efa_attr.as_mut_ptr()).driver_qp_type = ffi::EFADV_QP_DRIVER_TYPE_SRD as u32;
+        }
         let qp = unsafe {
             ffi::efadv_create_qp_ex(
                 self.pd.ctx.ctx,
                 attr.as_mut_ptr(),
-                &mut efa_attr as *mut _,
+                efa_attr.as_mut_ptr(),
                 std::mem::size_of::<ffi::efadv_qp_init_attr>() as u32,
             )
         };
         if qp.is_null() {
-            return Err(Error::CreateQueuePair(io::Error::last_os_error()));
+            return Err(Error::os(
+                io::Error::last_os_error(),
+                Error::CreateQueuePair,
+            ));
         }
         let qp_ex = unsafe { ffi::ibv_qp_to_qp_ex(qp) };
-        Ok(PreparedQueuePair {
+        let prepared = PreparedQueuePair {
             lid: self.port_attr.lid,
             port_num: self.port_num,
             qp: QueuePair {
@@ -137,9 +139,18 @@ impl QueuePairBuilder<Srd> {
             max_rd_atomic: None,
             max_dest_rd_atomic: None,
             path_mtu: None,
-            rq_psn: None,
+            psn: self.psn,
             service_level: self.service_level,
-        })
+        };
+        // As in qp.rs: a provider that accepted the send-operations mask without installing the
+        // work-request table leaves `ibv_qp_to_qp_ex` returning NULL. Dropping `prepared` destroys
+        // the queue pair.
+        if qp_ex.is_null() {
+            return Err(Error::Unsupported {
+                operation: "ibv_qp_to_qp_ex",
+            });
+        }
+        Ok(prepared)
     }
 }
 
@@ -160,32 +171,25 @@ impl PreparedQueuePair<Srd> {
 }
 
 impl AddressedSendOp<'_, '_, Srd> {
-    /// Post an RDMA WRITE into `remote`.
+    /// Post an RDMA WRITE of `payload` into `remote`, with the immediate set by
+    /// [`imm`](Self::imm) if any.
     #[inline]
-    pub fn write(self, wr_id: u64, local: &[LocalMemorySlice], remote: RemoteMemorySlice) {
-        self.op.build(wr_id, local, move |q| unsafe {
-            (*q).wr_rdma_write.unwrap()(q, remote.rkey, remote.addr)
-        })
-    }
-
-    /// Post an RDMA WRITE into `remote` carrying a 32-bit immediate (host byte order).
-    #[inline]
-    pub fn write_imm(
-        self,
-        wr_id: u64,
-        local: &[LocalMemorySlice],
-        remote: RemoteMemorySlice,
-        imm: u32,
-    ) {
-        self.op.build(wr_id, local, move |q| unsafe {
-            (*q).wr_rdma_write_imm.unwrap()(q, remote.rkey, remote.addr, imm.to_be())
+    pub fn write<'a>(self, wr_id: u64, payload: impl Into<Payload<'a>>, remote: RemoteMemorySlice) {
+        let imm = self.op.imm;
+        self.op.build(wr_id, payload.into(), move |q| unsafe {
+            match imm {
+                Some(imm) => {
+                    (*q).wr_rdma_write_imm.unwrap()(q, remote.rkey, remote.addr, imm.to_be())
+                }
+                None => (*q).wr_rdma_write.unwrap()(q, remote.rkey, remote.addr),
+            }
         })
     }
 
     /// Post an RDMA READ from `remote` into `local`.
     #[inline]
     pub fn read(self, wr_id: u64, local: &[LocalMemorySlice], remote: RemoteMemorySlice) {
-        self.op.build(wr_id, local, move |q| unsafe {
+        self.op.build(wr_id, Payload::Sges(local), move |q| unsafe {
             (*q).wr_rdma_read.unwrap()(q, remote.rkey, remote.addr)
         })
     }

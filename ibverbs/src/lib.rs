@@ -27,10 +27,12 @@
 //! let cq = ctx.create_cq(16).build()?;
 //! let pd = ctx.alloc_pd()?;
 //!
-//! // On RoCE, routing needs a GID; pick the index of a suitable entry in `ctx.gid_table()?`.
+//! // On RoCE, routing needs a GID; take the port's routable entry (its IPv4 RoCE v2 one, when
+//! // there is one).
+//! let gid = ctx.routable_gid(1)?.expect("no GID on port 1");
 //! let prepared = pd
 //!     .create_qp::<ibverbs::Rc>(&cq, &cq, 1)?
-//!     .set_gid_index(1)
+//!     .set_gid_index(gid.gid_index)
 //!     .build()?;
 //!
 //! // Exchange endpoints with the peer out of band (`QueuePairEndpoint::to_bytes` is the wire
@@ -52,11 +54,10 @@
 //! // Poll the completion queue until both work requests have completed.
 //! let mut pending = 2;
 //! while pending > 0 {
-//!     if let Some(mut completions) = cq.poll()? {
-//!         while let Some(wc) = completions.next() {
-//!             wc.ok().expect("work request failed");
-//!             pending -= 1;
-//!         }
+//!     let mut completions = cq.poll()?;
+//!     while let Some(wc) = completions.next() {
+//!         wc.ok().expect("work request failed");
+//!         pending -= 1;
 //!     }
 //! }
 //! assert_eq!(&recv.bytes_mut()[..5], b"hello");
@@ -92,10 +93,11 @@
 //! on Arch; `rdma-core-devel` on Fedora), plus `librdmacm` and `libefa` when the corresponding
 //! features are enabled.
 //!
-//! At build time, the bindings are generated from a vendored [`rdma-core`] checkout, which
-//! `ibverbs-sys` builds automatically (this requires `cmake` and a C toolchain, but nothing
-//! RDMA-specific to be installed). To generate bindings from pre-built `rdma-core` headers
-//! instead, set `RDMA_CORE_INCLUDE_DIR` and `RDMA_CORE_LIB_DIR`.
+//! At build time, the bindings are generated from a vendored [`rdma-core`] checkout, whose headers
+//! `ibverbs-sys` generates by running `cmake`'s configure step (nothing is compiled, so this needs
+//! `cmake` and a C compiler for its probes, but no RDMA development packages). To generate
+//! bindings from pre-built `rdma-core` headers instead, set `RDMA_CORE_INCLUDE_DIR` and
+//! `RDMA_CORE_LIB_DIR`.
 //!
 //! The crate drives completion queues and queue pairs exclusively through rdma-core's extended
 //! verbs (`ibv_create_cq_ex`, and `ibv_create_qp_ex` with the `ibv_wr_*` send API), so it needs a
