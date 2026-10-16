@@ -8,6 +8,7 @@
 // [`QueuePair::post_recv`], and completions through [`CompletionQueue::poll`].
 // ---------------------------------------------------------------------------
 
+use crate::context::Context;
 use crate::error::{Error, Result, nonnull};
 use crate::mr::{LocalMemorySlice, RemoteMemorySlice};
 use crate::qp::{
@@ -119,6 +120,77 @@ impl QueuePairBuilder<Srd> {
             });
         }
         Ok(prepared)
+    }
+}
+
+/// EFA-specific device attributes and capabilities, as returned by
+/// [`Context::query_efa_device`].
+///
+/// Dereferences to the raw [`ffi::efadv_device_attr`], so every field is accessible; the inherent
+/// methods decode the capability bits.
+#[derive(Clone, Debug)]
+pub struct EfaDeviceAttr(ffi::efadv_device_attr);
+
+impl EfaDeviceAttr {
+    fn has(&self, cap: u32) -> bool {
+        self.0.device_caps & cap != 0
+    }
+
+    /// Whether SRD queue pairs on the device can post RDMA reads.
+    pub fn rdma_read(&self) -> bool {
+        self.has(ffi::EFADV_DEVICE_ATTR_CAPS_RDMA_READ.0)
+    }
+
+    /// Whether SRD queue pairs on the device can post RDMA writes.
+    pub fn rdma_write(&self) -> bool {
+        self.has(ffi::EFADV_DEVICE_ATTR_CAPS_RDMA_WRITE.0)
+    }
+
+    /// The largest RDMA read or write a single work request can carry, in bytes.
+    pub fn max_rdma_size(&self) -> u32 {
+        self.0.max_rdma_size
+    }
+
+    /// The underlying `efadv_device_attr`.
+    pub fn as_raw(&self) -> &ffi::efadv_device_attr {
+        &self.0
+    }
+}
+
+impl std::ops::Deref for EfaDeviceAttr {
+    type Target = ffi::efadv_device_attr;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Context {
+    /// Query the EFA-specific attributes of this context's device (`efadv_query_device`).
+    ///
+    /// Fails with [`Unsupported`](Error::Unsupported) on any device that is not EFA, which makes
+    /// this the way to tell an EFA device apart.
+    ///
+    /// # Errors
+    ///
+    ///  - [`Unsupported`](Error::Unsupported): the device is not an EFA device (`EOPNOTSUPP`).
+    ///  - [`QueryEfaDevice`](Error::QueryEfaDevice): the query failed (`EINVAL` from a provider
+    ///    older than the attributes this crate reads).
+    pub fn query_efa_device(&self) -> Result<EfaDeviceAttr> {
+        let mut attr = ffi::efadv_device_attr::default();
+        // The provider fills in as much of the struct as the length covers, and refuses a length
+        // that does not reach the fields it requires.
+        let errno = unsafe {
+            ffi::efadv_query_device(
+                self.as_raw(),
+                &mut attr,
+                std::mem::size_of::<ffi::efadv_device_attr>() as u32,
+            )
+        };
+        if errno != 0 {
+            return Err(Error::errno(errno, Error::QueryEfaDevice));
+        }
+        Ok(EfaDeviceAttr(attr))
     }
 }
 

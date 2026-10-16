@@ -99,6 +99,11 @@ pub enum Error {
     #[error("failed to query the device real-time values")]
     QueryRealTimeValues(#[source] io::Error),
 
+    /// Querying the EFA device attributes failed (`efadv_query_device`).
+    #[cfg(feature = "efa")]
+    #[error("failed to query the EFA device attributes")]
+    QueryEfaDevice(#[source] io::Error),
+
     /// Querying the mlx5 Data Direct sysfs path failed (`mlx5dv_get_data_direct_sysfs_path`).
     #[cfg(feature = "mlx5")]
     #[error("failed to query the mlx5 Data Direct sysfs path")]
@@ -275,6 +280,8 @@ impl Error {
             Error::QueryGid { .. } => &"ibv_query_gid",
             Error::QueryGidTable(_) => &"ibv_query_gid_table",
             Error::QueryRealTimeValues(_) => &"ibv_query_rt_values_ex",
+            #[cfg(feature = "efa")]
+            Error::QueryEfaDevice(_) => &"efadv_query_device",
             #[cfg(feature = "mlx5")]
             Error::QueryMlx5DataDirectSysfsPath(_) => &"mlx5dv_get_data_direct_sysfs_path",
             Error::AllocProtectionDomain(_) => &"ibv_alloc_pd",
