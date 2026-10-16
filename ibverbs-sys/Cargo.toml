@@ -44,6 +44,11 @@ include = [
 all-features = true
 
 [features]
+# Use the bindings committed under `src/prebuilt/` instead of running bindgen, removing libclang and
+# the vendored rdma-core checkout from the build-time requirements. Covers the base and `efa`
+# bindings on x86_64 and aarch64 Linux (glibc), and loses to an explicit `RDMA_CORE_INCLUDE_DIR`;
+# anything else falls back to bindgen.
+prebuilt-bindings = []
 # Bind and link the EFA provider direct-verbs (`efadv`), for AWS Elastic Fabric Adapter SRD queue
 # pairs. Requires `libefa` at build and run time.
 efa = []

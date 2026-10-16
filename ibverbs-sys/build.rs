@@ -62,24 +62,84 @@ fn update_submodule() {
     }
 }
 
+/// The committed bindings for `target`, if there are any: one file per architecture, and per
+/// whether the `efa` bindings are included. See `src/prebuilt/README.md`.
+fn prebuilt_bindings(target: &str, efa: bool) -> Option<String> {
+    let arch = match target {
+        "x86_64-unknown-linux-gnu" => "x86_64",
+        "aarch64-unknown-linux-gnu" => "aarch64",
+        _ => return None,
+    };
+    let efa = if efa { "_efa" } else { "" };
+    Some(format!("bindings_{arch}_linux{efa}.rs"))
+}
+
 fn main() {
-    println!("cargo:rustc-link-lib=ibverbs");
+    // Printing any rerun-if directive replaces cargo's default whole-package tracking (the script
+    // binary itself stays tracked), so each path below declares its own file inputs. The
+    // environment variables are declared up front because they decide which path runs.
+    for var in [
+        "RDMA_CORE_INCLUDE_DIR",
+        "RDMA_CORE_LIB_DIR",
+        "IBVERBS_HEADER_DIR",
+        "IBVERBS_SYS_NO_LINK",
+    ] {
+        println!("cargo:rerun-if-env-changed={var}");
+    }
+
+    // Hermetic build systems (Bazel, for one) set IBVERBS_SYS_NO_LINK=1 to suppress the link
+    // directives and supply the libraries through their own dependency graph instead.
+    let link = !env::var("IBVERBS_SYS_NO_LINK").is_ok_and(|v| v == "1");
+    if link {
+        println!("cargo:rustc-link-lib=ibverbs");
+    }
 
     let efa = env::var("CARGO_FEATURE_EFA").is_ok();
-    if efa {
+    if efa && link {
         // `efadv_create_qp_ex` and friends are exported from libefa.
         println!("cargo:rustc-link-lib=efa");
     }
 
     let mlx5 = env::var("CARGO_FEATURE_MLX5").is_ok();
-    if mlx5 {
+    if mlx5 && link {
         println!("cargo:rustc-link-lib=mlx5");
     }
 
     let rdmacm = env::var("CARGO_FEATURE_RDMACM").is_ok();
-    if rdmacm {
+    if rdmacm && link {
         // The `rdma_*` connection-manager functions are exported from librdmacm.
         println!("cargo:rustc-link-lib=rdmacm");
+    }
+
+    // With the `prebuilt-bindings` feature, targets with bindings committed under `src/prebuilt/`
+    // skip bindgen (and with it libclang and the vendored checkout): the committed file is copied
+    // to where `lib.rs` includes the bindings from. Every committed file is this script's output
+    // for its target (see `src/prebuilt/README.md`), and bindgen's layout assertions make one
+    // compiled for the wrong target a compile error. The feature loses to an explicit
+    // RDMA_CORE_INCLUDE_DIR, and the `mlx5` and `rdmacm` bindings are not pre-generated, so those
+    // cases fall back to bindgen.
+    let prebuilt = env::var("CARGO_FEATURE_PREBUILT_BINDINGS").is_ok();
+    if prebuilt && !mlx5 && !rdmacm && env::var("RDMA_CORE_INCLUDE_DIR").is_err() {
+        let target = env::var("TARGET").unwrap_or_default();
+        if let Some(file) = prebuilt_bindings(&target, efa) {
+            let path = Path::new("src/prebuilt").join(&file);
+            println!("cargo:rerun-if-changed={}", path.display());
+            let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+            fs::copy(&path, out_path.join("bindings.rs"))
+                .unwrap_or_else(|e| panic!("failed to copy {}: {e}", path.display()));
+            return;
+        }
+        println!(
+            "cargo:warning=no pre-generated ibverbs bindings for {target}; falling back to bindgen"
+        );
+    } else if prebuilt {
+        println!(
+            "cargo:warning=prebuilt ibverbs bindings do not cover mlx5, rdmacm, or \
+             RDMA_CORE_INCLUDE_DIR; falling back to bindgen"
+        );
+    }
+    for (_, from) in VENDORED_HEADERS {
+        println!("cargo:rerun-if-changed=vendor/rdma-core/{from}");
     }
 
     // Where `verbs.h`'s own includes (`<infiniband/verbs_api.h>` and friends) come from: either
@@ -167,7 +227,8 @@ fn main() {
             .header_contents("efadv_wrapper.h", "#include <infiniband/efadv.h>")
             .allowlist_function("efadv_.*")
             .allowlist_type("efadv_.*")
-            .allowlist_var("EFADV_QP_DRIVER_TYPE_.*");
+            .allowlist_var("EFADV_QP_DRIVER_TYPE_.*")
+            .allowlist_var("EFADV_DEVICE_ATTR_CAPS_.*");
     }
 
     if mlx5 {
