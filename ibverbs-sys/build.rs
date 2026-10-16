@@ -122,7 +122,11 @@ fn main() {
     if prebuilt && !mlx5 && !rdmacm && env::var("RDMA_CORE_INCLUDE_DIR").is_err() {
         let target = env::var("TARGET").unwrap_or_default();
         if let Some(file) = prebuilt_bindings(&target, efa) {
-            let path = Path::new("src/prebuilt").join(&file);
+            // Bazel can run build scripts outside the crate directory, so the path is anchored to
+            // the manifest rather than taken relative to the working directory.
+            let manifest_dir =
+                env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is set by cargo");
+            let path = Path::new(&manifest_dir).join("src/prebuilt").join(&file);
             println!("cargo:rerun-if-changed={}", path.display());
             let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
             fs::copy(&path, out_path.join("bindings.rs"))
