@@ -404,6 +404,32 @@ impl ib_uverbs_advise_mr_flag {
     pub const IB_UVERBS_ADVISE_MR_FLAG_FLUSH: ib_uverbs_advise_mr_flag =
         ib_uverbs_advise_mr_flag(1);
 }
+impl ::std::ops::BitOr<ib_uverbs_advise_mr_flag> for ib_uverbs_advise_mr_flag {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ib_uverbs_advise_mr_flag(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ib_uverbs_advise_mr_flag {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ib_uverbs_advise_mr_flag) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ib_uverbs_advise_mr_flag> for ib_uverbs_advise_mr_flag {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ib_uverbs_advise_mr_flag(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ib_uverbs_advise_mr_flag {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ib_uverbs_advise_mr_flag) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ib_uverbs_advise_mr_flag(pub ::std::os::raw::c_uint);
@@ -601,6 +627,32 @@ const _: () = {
 };
 impl ibv_dm_mask {
     pub const IBV_DM_MASK_HANDLE: ibv_dm_mask = ibv_dm_mask(1);
+}
+impl ::std::ops::BitOr<ibv_dm_mask> for ibv_dm_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_dm_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_dm_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_dm_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_dm_mask> for ibv_dm_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_dm_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_dm_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_dm_mask) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -805,6 +857,32 @@ impl ibv_odp_general_caps {
     pub const IBV_ODP_SUPPORT: ibv_odp_general_caps = ibv_odp_general_caps(1);
     pub const IBV_ODP_SUPPORT_IMPLICIT: ibv_odp_general_caps = ibv_odp_general_caps(2);
 }
+impl ::std::ops::BitOr<ibv_odp_general_caps> for ibv_odp_general_caps {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_odp_general_caps(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_odp_general_caps {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_odp_general_caps) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_odp_general_caps> for ibv_odp_general_caps {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_odp_general_caps(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_odp_general_caps {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_odp_general_caps) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_odp_general_caps(pub ::std::os::raw::c_uint);
@@ -900,6 +978,32 @@ const _: () = {
 };
 impl ibv_rx_hash_function_flags {
     pub const IBV_RX_HASH_FUNC_TOEPLITZ: ibv_rx_hash_function_flags = ibv_rx_hash_function_flags(1);
+}
+impl ::std::ops::BitOr<ibv_rx_hash_function_flags> for ibv_rx_hash_function_flags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_rx_hash_function_flags(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_rx_hash_function_flags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_rx_hash_function_flags) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_rx_hash_function_flags> for ibv_rx_hash_function_flags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_rx_hash_function_flags(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_rx_hash_function_flags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_rx_hash_function_flags) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -1026,6 +1130,32 @@ pub struct ibv_raw_packet_caps(pub ::std::os::raw::c_uint);
 impl ibv_tm_cap_flags {
     pub const IBV_TM_CAP_RC: ibv_tm_cap_flags = ibv_tm_cap_flags(1);
 }
+impl ::std::ops::BitOr<ibv_tm_cap_flags> for ibv_tm_cap_flags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_tm_cap_flags(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_tm_cap_flags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_tm_cap_flags) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_tm_cap_flags> for ibv_tm_cap_flags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_tm_cap_flags(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_tm_cap_flags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_tm_cap_flags) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_tm_cap_flags(pub ::std::os::raw::c_uint);
@@ -1075,6 +1205,32 @@ impl ibv_pci_atomic_op_size {
         ibv_pci_atomic_op_size(2);
     pub const IBV_PCI_ATOMIC_OPERATION_16_BYTE_SIZE_SUP: ibv_pci_atomic_op_size =
         ibv_pci_atomic_op_size(4);
+}
+impl ::std::ops::BitOr<ibv_pci_atomic_op_size> for ibv_pci_atomic_op_size {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_pci_atomic_op_size(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_pci_atomic_op_size {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_pci_atomic_op_size) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_pci_atomic_op_size> for ibv_pci_atomic_op_size {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_pci_atomic_op_size(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_pci_atomic_op_size {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_pci_atomic_op_size) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -1599,6 +1755,23 @@ impl ::std::ops::BitAndAssign for ibv_wc_flags {
 pub struct ibv_wc_flags(pub ::std::os::raw::c_uint);
 #[repr(C)]
 #[derive(Copy, Clone)]
+pub struct ibv_wc {
+    pub wr_id: u64,
+    pub status: ibv_wc_status,
+    pub opcode: ibv_wc_opcode,
+    pub vendor_err: u32,
+    pub byte_len: u32,
+    pub __bindgen_anon_1: ibv_wc__bindgen_ty_1,
+    pub qp_num: u32,
+    pub src_qp: u32,
+    pub wc_flags: ::std::os::raw::c_uint,
+    pub pkey_index: u16,
+    pub slid: u16,
+    pub sl: u8,
+    pub dlid_path_bits: u8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
 pub union ibv_wc__bindgen_ty_1 {
     pub imm_data: __be32,
     pub invalidated_rkey: u32,
@@ -1613,6 +1786,33 @@ const _: () = {
         [::std::mem::offset_of!(ibv_wc__bindgen_ty_1, invalidated_rkey) - 0usize];
 };
 impl Default for ibv_wc__bindgen_ty_1 {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of ibv_wc"][::std::mem::size_of::<ibv_wc>() - 48usize];
+    ["Alignment of ibv_wc"][::std::mem::align_of::<ibv_wc>() - 8usize];
+    ["Offset of field: ibv_wc::wr_id"][::std::mem::offset_of!(ibv_wc, wr_id) - 0usize];
+    ["Offset of field: ibv_wc::status"][::std::mem::offset_of!(ibv_wc, status) - 8usize];
+    ["Offset of field: ibv_wc::opcode"][::std::mem::offset_of!(ibv_wc, opcode) - 12usize];
+    ["Offset of field: ibv_wc::vendor_err"][::std::mem::offset_of!(ibv_wc, vendor_err) - 16usize];
+    ["Offset of field: ibv_wc::byte_len"][::std::mem::offset_of!(ibv_wc, byte_len) - 20usize];
+    ["Offset of field: ibv_wc::qp_num"][::std::mem::offset_of!(ibv_wc, qp_num) - 28usize];
+    ["Offset of field: ibv_wc::src_qp"][::std::mem::offset_of!(ibv_wc, src_qp) - 32usize];
+    ["Offset of field: ibv_wc::wc_flags"][::std::mem::offset_of!(ibv_wc, wc_flags) - 36usize];
+    ["Offset of field: ibv_wc::pkey_index"][::std::mem::offset_of!(ibv_wc, pkey_index) - 40usize];
+    ["Offset of field: ibv_wc::slid"][::std::mem::offset_of!(ibv_wc, slid) - 42usize];
+    ["Offset of field: ibv_wc::sl"][::std::mem::offset_of!(ibv_wc, sl) - 44usize];
+    ["Offset of field: ibv_wc::dlid_path_bits"]
+        [::std::mem::offset_of!(ibv_wc, dlid_path_bits) - 45usize];
+};
+impl Default for ibv_wc {
     fn default() -> Self {
         let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
         unsafe {
@@ -1850,6 +2050,32 @@ impl ibv_rereg_mr_flags {
     pub const IBV_REREG_MR_CHANGE_ACCESS: ibv_rereg_mr_flags = ibv_rereg_mr_flags(4);
     pub const IBV_REREG_MR_FLAGS_SUPPORTED: ibv_rereg_mr_flags = ibv_rereg_mr_flags(7);
 }
+impl ::std::ops::BitOr<ibv_rereg_mr_flags> for ibv_rereg_mr_flags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_rereg_mr_flags(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_rereg_mr_flags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_rereg_mr_flags) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_rereg_mr_flags> for ibv_rereg_mr_flags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_rereg_mr_flags(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_rereg_mr_flags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_rereg_mr_flags) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_rereg_mr_flags(pub ::std::os::raw::c_uint);
@@ -1892,6 +2118,32 @@ impl ibv_mr_init_attr_mask {
     pub const IBV_REG_MR_MASK_FD_OFFSET: ibv_mr_init_attr_mask = ibv_mr_init_attr_mask(8);
     pub const IBV_REG_MR_MASK_DMAH: ibv_mr_init_attr_mask = ibv_mr_init_attr_mask(16);
     pub const IBV_REG_MR_MASK_BUF: ibv_mr_init_attr_mask = ibv_mr_init_attr_mask(32);
+}
+impl ::std::ops::BitOr<ibv_mr_init_attr_mask> for ibv_mr_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_mr_init_attr_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_mr_init_attr_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_mr_init_attr_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_mr_init_attr_mask> for ibv_mr_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_mr_init_attr_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_mr_init_attr_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_mr_init_attr_mask) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -2117,6 +2369,32 @@ impl ibv_srq_attr_mask {
     pub const IBV_SRQ_MAX_WR: ibv_srq_attr_mask = ibv_srq_attr_mask(1);
     pub const IBV_SRQ_LIMIT: ibv_srq_attr_mask = ibv_srq_attr_mask(2);
 }
+impl ::std::ops::BitOr<ibv_srq_attr_mask> for ibv_srq_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_srq_attr_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_srq_attr_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_srq_attr_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_srq_attr_mask> for ibv_srq_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_srq_attr_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_srq_attr_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_srq_attr_mask) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_srq_attr_mask(pub ::std::os::raw::c_uint);
@@ -2272,6 +2550,32 @@ pub struct ibv_wq_type(pub ::std::os::raw::c_uint);
 impl ibv_wq_init_attr_mask {
     pub const IBV_WQ_INIT_ATTR_FLAGS: ibv_wq_init_attr_mask = ibv_wq_init_attr_mask(1);
     pub const IBV_WQ_INIT_ATTR_RESERVED: ibv_wq_init_attr_mask = ibv_wq_init_attr_mask(2);
+}
+impl ::std::ops::BitOr<ibv_wq_init_attr_mask> for ibv_wq_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_wq_init_attr_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_wq_init_attr_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_wq_init_attr_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_wq_init_attr_mask> for ibv_wq_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_wq_init_attr_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_wq_init_attr_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_wq_init_attr_mask) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -2464,6 +2768,32 @@ impl ibv_ind_table_init_attr_mask {
     pub const IBV_CREATE_IND_TABLE_RESERVED: ibv_ind_table_init_attr_mask =
         ibv_ind_table_init_attr_mask(1);
 }
+impl ::std::ops::BitOr<ibv_ind_table_init_attr_mask> for ibv_ind_table_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_ind_table_init_attr_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_ind_table_init_attr_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_ind_table_init_attr_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_ind_table_init_attr_mask> for ibv_ind_table_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_ind_table_init_attr_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_ind_table_init_attr_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_ind_table_init_attr_mask) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_ind_table_init_attr_mask(pub ::std::os::raw::c_uint);
@@ -2615,6 +2945,32 @@ impl ibv_qp_create_flags {
     pub const IBV_QP_CREATE_CVLAN_STRIPPING: ibv_qp_create_flags = ibv_qp_create_flags(512);
     pub const IBV_QP_CREATE_SOURCE_QPN: ibv_qp_create_flags = ibv_qp_create_flags(1024);
     pub const IBV_QP_CREATE_PCI_WRITE_END_PADDING: ibv_qp_create_flags = ibv_qp_create_flags(2048);
+}
+impl ::std::ops::BitOr<ibv_qp_create_flags> for ibv_qp_create_flags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_qp_create_flags(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_qp_create_flags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_qp_create_flags) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_qp_create_flags> for ibv_qp_create_flags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_qp_create_flags(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_qp_create_flags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_qp_create_flags) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -2898,6 +3254,32 @@ impl ibv_query_qp_data_in_order_flags {
     pub const IBV_QUERY_QP_DATA_IN_ORDER_DEVICE_ONLY: ibv_query_qp_data_in_order_flags =
         ibv_query_qp_data_in_order_flags(2);
 }
+impl ::std::ops::BitOr<ibv_query_qp_data_in_order_flags> for ibv_query_qp_data_in_order_flags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_query_qp_data_in_order_flags(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_query_qp_data_in_order_flags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_query_qp_data_in_order_flags) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_query_qp_data_in_order_flags> for ibv_query_qp_data_in_order_flags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_query_qp_data_in_order_flags(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_query_qp_data_in_order_flags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_query_qp_data_in_order_flags) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_query_qp_data_in_order_flags(pub ::std::os::raw::c_uint);
@@ -2906,6 +3288,32 @@ impl ibv_query_qp_data_in_order_caps {
         ibv_query_qp_data_in_order_caps(1);
     pub const IBV_QUERY_QP_DATA_IN_ORDER_ALIGNED_128_BYTES: ibv_query_qp_data_in_order_caps =
         ibv_query_qp_data_in_order_caps(2);
+}
+impl ::std::ops::BitOr<ibv_query_qp_data_in_order_caps> for ibv_query_qp_data_in_order_caps {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_query_qp_data_in_order_caps(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_query_qp_data_in_order_caps {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_query_qp_data_in_order_caps) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_query_qp_data_in_order_caps> for ibv_query_qp_data_in_order_caps {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_query_qp_data_in_order_caps(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_query_qp_data_in_order_caps {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_query_qp_data_in_order_caps) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -3501,6 +3909,32 @@ pub struct ibv_ops_wr_opcode(pub ::std::os::raw::c_uint);
 impl ibv_ops_flags {
     pub const IBV_OPS_SIGNALED: ibv_ops_flags = ibv_ops_flags(1);
     pub const IBV_OPS_TM_SYNC: ibv_ops_flags = ibv_ops_flags(2);
+}
+impl ::std::ops::BitOr<ibv_ops_flags> for ibv_ops_flags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_ops_flags(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_ops_flags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_ops_flags) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_ops_flags> for ibv_ops_flags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_ops_flags(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_ops_flags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_ops_flags) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -4141,6 +4575,32 @@ impl ibv_cq_attr_mask {
     pub const IBV_CQ_ATTR_MODERATE: ibv_cq_attr_mask = ibv_cq_attr_mask(1);
     pub const IBV_CQ_ATTR_RESERVED: ibv_cq_attr_mask = ibv_cq_attr_mask(2);
 }
+impl ::std::ops::BitOr<ibv_cq_attr_mask> for ibv_cq_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_cq_attr_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_cq_attr_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_cq_attr_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_cq_attr_mask> for ibv_cq_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_cq_attr_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_cq_attr_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_cq_attr_mask) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_cq_attr_mask(pub ::std::os::raw::c_uint);
@@ -4201,6 +4661,32 @@ impl Default for ibv_ah {
 impl ibv_flow_flags {
     pub const IBV_FLOW_ATTR_FLAGS_DONT_TRAP: ibv_flow_flags = ibv_flow_flags(2);
     pub const IBV_FLOW_ATTR_FLAGS_EGRESS: ibv_flow_flags = ibv_flow_flags(4);
+}
+impl ::std::ops::BitOr<ibv_flow_flags> for ibv_flow_flags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_flow_flags(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_flow_flags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_flow_flags) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_flow_flags> for ibv_flow_flags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_flow_flags(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_flow_flags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_flow_flags) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -4977,6 +5463,32 @@ impl Default for ibv_flow_action {
 impl ibv_flow_action_esp_mask {
     pub const IBV_FLOW_ACTION_ESP_MASK_ESN: ibv_flow_action_esp_mask = ibv_flow_action_esp_mask(1);
 }
+impl ::std::ops::BitOr<ibv_flow_action_esp_mask> for ibv_flow_action_esp_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_flow_action_esp_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_flow_action_esp_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_flow_action_esp_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_flow_action_esp_mask> for ibv_flow_action_esp_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_flow_action_esp_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_flow_action_esp_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_flow_action_esp_mask) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_flow_action_esp_mask(pub ::std::os::raw::c_uint);
@@ -5308,6 +5820,32 @@ impl ibv_cq_init_attr_mask {
     pub const IBV_CQ_INIT_ATTR_MASK_FLAGS: ibv_cq_init_attr_mask = ibv_cq_init_attr_mask(1);
     pub const IBV_CQ_INIT_ATTR_MASK_PD: ibv_cq_init_attr_mask = ibv_cq_init_attr_mask(2);
 }
+impl ::std::ops::BitOr<ibv_cq_init_attr_mask> for ibv_cq_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_cq_init_attr_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_cq_init_attr_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_cq_init_attr_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_cq_init_attr_mask> for ibv_cq_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_cq_init_attr_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_cq_init_attr_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_cq_init_attr_mask) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_cq_init_attr_mask(pub ::std::os::raw::c_uint);
@@ -5316,6 +5854,32 @@ impl ibv_create_cq_attr_flags {
         ibv_create_cq_attr_flags(1);
     pub const IBV_CREATE_CQ_ATTR_IGNORE_OVERRUN: ibv_create_cq_attr_flags =
         ibv_create_cq_attr_flags(2);
+}
+impl ::std::ops::BitOr<ibv_create_cq_attr_flags> for ibv_create_cq_attr_flags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_create_cq_attr_flags(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_create_cq_attr_flags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_create_cq_attr_flags) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_create_cq_attr_flags> for ibv_create_cq_attr_flags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_create_cq_attr_flags(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_create_cq_attr_flags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_create_cq_attr_flags) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -5375,6 +5939,32 @@ impl ibv_qp_attach_comp_cntr_op {
         ibv_qp_attach_comp_cntr_op(16);
     pub const IBV_QP_ATTACH_COMP_CNTR_OP_REMOTE_RDMA_WRITE: ibv_qp_attach_comp_cntr_op =
         ibv_qp_attach_comp_cntr_op(32);
+}
+impl ::std::ops::BitOr<ibv_qp_attach_comp_cntr_op> for ibv_qp_attach_comp_cntr_op {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_qp_attach_comp_cntr_op(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_qp_attach_comp_cntr_op {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_qp_attach_comp_cntr_op) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_qp_attach_comp_cntr_op> for ibv_qp_attach_comp_cntr_op {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_qp_attach_comp_cntr_op(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_qp_attach_comp_cntr_op {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_qp_attach_comp_cntr_op) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -5481,6 +6071,32 @@ impl ibv_parent_domain_init_attr_mask {
     pub const IBV_PARENT_DOMAIN_INIT_ATTR_ALLOW_CC_UNPROTECTED_ALLOC:
         ibv_parent_domain_init_attr_mask = ibv_parent_domain_init_attr_mask(4);
 }
+impl ::std::ops::BitOr<ibv_parent_domain_init_attr_mask> for ibv_parent_domain_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_parent_domain_init_attr_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_parent_domain_init_attr_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_parent_domain_init_attr_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_parent_domain_init_attr_mask> for ibv_parent_domain_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_parent_domain_init_attr_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_parent_domain_init_attr_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_parent_domain_init_attr_mask) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_parent_domain_init_attr_mask(pub ::std::os::raw::c_uint);
@@ -5549,6 +6165,32 @@ impl ibv_dmah_init_attr_mask {
     pub const IBV_DMAH_INIT_ATTR_MASK_PH: ibv_dmah_init_attr_mask = ibv_dmah_init_attr_mask(2);
     pub const IBV_DMAH_INIT_ATTR_MASK_TPH_MEM_TYPE: ibv_dmah_init_attr_mask =
         ibv_dmah_init_attr_mask(4);
+}
+impl ::std::ops::BitOr<ibv_dmah_init_attr_mask> for ibv_dmah_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_dmah_init_attr_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_dmah_init_attr_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_dmah_init_attr_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_dmah_init_attr_mask> for ibv_dmah_init_attr_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_dmah_init_attr_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_dmah_init_attr_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_dmah_init_attr_mask) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -5647,12 +6289,64 @@ impl ibv_read_counters_flags {
     pub const IBV_READ_COUNTERS_ATTR_PREFER_CACHED: ibv_read_counters_flags =
         ibv_read_counters_flags(1);
 }
+impl ::std::ops::BitOr<ibv_read_counters_flags> for ibv_read_counters_flags {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_read_counters_flags(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_read_counters_flags {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_read_counters_flags) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_read_counters_flags> for ibv_read_counters_flags {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_read_counters_flags(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_read_counters_flags {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_read_counters_flags) {
+        self.0 &= rhs.0;
+    }
+}
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ibv_read_counters_flags(pub ::std::os::raw::c_uint);
 impl ibv_values_mask {
     pub const IBV_VALUES_MASK_RAW_CLOCK: ibv_values_mask = ibv_values_mask(1);
     pub const IBV_VALUES_MASK_RESERVED: ibv_values_mask = ibv_values_mask(2);
+}
+impl ::std::ops::BitOr<ibv_values_mask> for ibv_values_mask {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, other: Self) -> Self {
+        ibv_values_mask(self.0 | other.0)
+    }
+}
+impl ::std::ops::BitOrAssign for ibv_values_mask {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: ibv_values_mask) {
+        self.0 |= rhs.0;
+    }
+}
+impl ::std::ops::BitAnd<ibv_values_mask> for ibv_values_mask {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, other: Self) -> Self {
+        ibv_values_mask(self.0 & other.0)
+    }
+}
+impl ::std::ops::BitAndAssign for ibv_values_mask {
+    #[inline]
+    fn bitand_assign(&mut self, rhs: ibv_values_mask) {
+        self.0 &= rhs.0;
+    }
 }
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
